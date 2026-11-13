@@ -12,7 +12,7 @@ FIELDS = [('tipo_documental', 'Tipo documental'), ('fecha', 'Fecha'), ('folio_de
           ('expediente_sgdea', 'Expediente SGDEA'), ('enlace_acceso', 'Enlace'), ('observaciones', 'Observaciones')]
 
 
-def show_work(app, parent, data):
+def show_work(app, parent, data, initial_tab=0):
     code = data['code']
     window = tk.Toplevel(parent)
     window.title('TEC-SGDEA | Trabajo documental')
@@ -22,7 +22,8 @@ def show_work(app, parent, data):
 
     def close(_=None):
         window.destroy()
-        parent.grab_set()
+        if parent is not app.root:
+            parent.grab_set()
 
     window.protocol('WM_DELETE_WINDOW', close)
     window.bind('<Escape>', close)
@@ -34,6 +35,7 @@ def show_work(app, parent, data):
     technical, sheet, trace = (ttk.Frame(tabs, padding=10) for _ in range(3))
     for tab, label in zip((technical, sheet, trace), ('Digitalización', 'Hoja de control', 'Trazabilidad')):
         tabs.add(tab, text=label)
+    tabs.select(initial_tab)
 
     status = tk.StringVar(value='Datos de la última consulta al servidor.')
     ttk.Label(body, textvariable=status, wraplength=770).pack(side='left')

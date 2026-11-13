@@ -96,7 +96,14 @@ tbody tr:hover { background:#F6F7FE; }
 .ta-sidebar-footer { padding:var(--ta-s4) var(--ta-s2); font-size:.67rem; letter-spacing:.1em; color:var(--ta-muted); }
 #menu { display:block; background:none; border:0; overflow:visible; }
 .ta-nav-group + .ta-nav-group { margin-top:var(--ta-s2); }
-.ta-nav-label { margin:0; padding:var(--ta-s2) var(--ta-s3) var(--ta-s1); color:var(--ta-muted); font-weight:700; font-size:.69rem; letter-spacing:.06em; text-transform:uppercase; }
+.ta-nav-group { border:1px solid var(--ta-line); border-radius:10px; background:var(--ta-white); }
+.ta-nav-group summary { cursor:pointer; color:var(--ta-ink); font-weight:650; padding:10px 8px; min-height:40px; }
+.ta-nav-group summary::marker { color:var(--ta-indigo); }
+.ta-nav-icon { display:inline-block; width:1.5em; text-align:center; color:var(--ta-indigo); }
+.ta-nav-group[open] summary { background:var(--ta-canvas); border-radius:9px 9px 0 0; }
+.ta-nav-group:has([aria-current="page"]) summary { color:var(--ta-indigo); }
+#menu summary:focus-visible, #menu button:focus-visible { outline:2px solid var(--ta-indigo); outline-offset:-2px; }
+#menu .ta-nav-group button { padding-inline-start:24px; }
 #menu button {
   width:100%; text-align:left; white-space:normal; color:var(--ta-ink);
   padding:7px var(--ta-s3); min-height:32px; border:0; border-radius:8px;

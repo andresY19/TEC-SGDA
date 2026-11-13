@@ -1483,26 +1483,32 @@ function pintarMenu(){
   const permitidas = (SESION && SESION.pestanas) ? SESION.pestanas : ["inicio"];
   const menu = document.getElementById("menu");
   menu.innerHTML = "";
-  const grupos = new Map();
-  VISTAS.filter(v => permitidas.indexOf(v.clave) !== -1).forEach((v, i) => {
+  const vistas = new Map(VISTAS.filter(v => permitidas.includes(v.clave)).map(v => [v.clave, v]));
+  function acceso(v){
     const b = document.createElement("button");
-    b.textContent = v.titulo;
-    if (i === 0) b.className = "act";
+    b.type = "button";
+    b.textContent = ({planeacion:"Inventario y planeación",localizacion:"Búsqueda y fichas",
+      proceso:"Digitalización",cargue:"Cargue y alta de expedientes",
+      cuentas:"Cuentas y permisos",instrumentos:"Instrumentos y reportes"})[v.clave] || v.titulo;
     b.dataset.vista = v.clave;
     b.onclick = () => mostrarVista(v, b);
-    const nombre = TEC.grupo(v.clave);
-    if (!grupos.has(nombre)) {
-      const grupo = document.createElement("div");
-      grupo.className = "ta-nav-group";
-      const etiqueta = document.createElement("p");
-      etiqueta.className = "ta-nav-label";
-      etiqueta.textContent = nombre;
-      grupo.append(etiqueta);
-      menu.append(grupo);
-      grupos.set(nombre, grupo);
-    }
-    grupos.get(nombre).append(b);
-  });
+    return b;
+  }
+  if (vistas.has("inicio")) menu.append(acceso(vistas.get("inicio")));
+  for (const [nombre, icono, claves] of TEC.grupos){
+    const opciones = claves.filter(clave => vistas.has(clave));
+    if (!opciones.length) continue;
+    const grupo = document.createElement("details");
+    grupo.className = "ta-nav-group";
+    const etiqueta = document.createElement("summary");
+    const icon = document.createElement("span");
+    icon.setAttribute("aria-hidden","true");
+    icon.className = "ta-nav-icon";
+    icon.textContent = icono;
+    etiqueta.append(icon, nombre);
+    grupo.append(etiqueta, ...opciones.map(clave => acceso(vistas.get(clave))));
+    menu.append(grupo);
+  }
 }
 
 function mostrarVista(vista, btn){
@@ -1514,8 +1520,15 @@ function mostrarVista(vista, btn){
   document.querySelectorAll(".vista").forEach(v => v.classList.add("oculto"));
   const seccion = document.getElementById(vista.id);
   if (seccion) seccion.classList.remove("oculto");
-  document.querySelectorAll("nav button").forEach(b => b.classList.remove("act"));
-  if (btn) btn.classList.add("act");
+  document.querySelectorAll("#menu button[data-vista]").forEach(b => {
+    const active = b.dataset.vista === vista.clave;
+    b.classList.toggle("act", active);
+    if (active) {
+      b.setAttribute("aria-current","page");
+      const grupo = b.closest("details");
+      if (grupo) grupo.open = true;
+    } else b.removeAttribute("aria-current");
+  });
   if (vista.al) vista.al();
 }
 
@@ -1588,7 +1601,7 @@ function abrirPlataforma(){
   const permitidas = SESION.pestanas || [];
   if (permitidas.indexOf("inicio") !== -1) {
     agregarFila();
-    cargarInicio();
+    mostrarVista(VISTAS[0]);
   } else {
     /* Un perfil sin la pestaña Inicio (la entidad) entra directo a su primera pestaña. */
     const primera = VISTAS.find(v => permitidas.indexOf(v.clave) !== -1);

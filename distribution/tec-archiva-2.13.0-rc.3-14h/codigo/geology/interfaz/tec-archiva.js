@@ -4,13 +4,13 @@ const TEC = (() => {
   const sidebar = get('taSidebar');
   const toggle = get('taMenuToggle');
   const compact = matchMedia('(max-width:850px)');
-  const groups = {
-    inicio:'Dashboard', planeacion:'Inventarios', localizacion:'Expedientes',
-    reubicacion:'Expedientes', hojas:'Expedientes', cargue:'Digitalización',
-    proceso:'Digitalización', revision:'Revisión', calidad:'Revisión',
-    consulta:'Consulta', instrumentos:'Reportes', avance:'Reportes',
-    seguimiento:'Reportes', contrato:'Administración', cuentas:'Administración'
-  };
+  const groups = [
+    ['Inventarios','▤',['planeacion','consulta']],
+    ['Expedientes','▣',['localizacion','reubicacion']],
+    ['Gestión documental','▧',['cargue','proceso','hojas','revision','calidad']],
+    ['Seguimiento','↻',['seguimiento','avance']],
+    ['Administración','⚙',['cuentas','instrumentos','contrato']]
+  ];
   const quickViews = ['cargue','proceso','revision','localizacion'];
   const number = new Intl.NumberFormat('es-CO');
   let viewTitle = 'Dashboard';
@@ -54,7 +54,7 @@ const TEC = (() => {
   function navegacion(vista) {
     viewTitle = vista.titulo;
     restaurarRuta();
-    if (compact.matches) setMenu(false);
+    if (compact.matches && toggle.getAttribute('aria-expanded') === 'true') setMenu(false, true);
   }
   function restaurarRuta() { get('taCrumb').textContent = viewTitle; }
   function rutaFicha() { get('taCrumb').textContent = viewTitle + ' / Ficha de expediente'; }
@@ -182,5 +182,5 @@ const TEC = (() => {
       ? 'Algunos indicadores no están disponibles.' : 'Indicadores operativos actualizados.';
   }
   get('taRefresh').addEventListener('click', dashboard);
-  return {grupo:key => groups[key], navegacion, restaurarRuta, rutaFicha, dashboard, alertas};
+  return {grupos:groups, navegacion, restaurarRuta, rutaFicha, dashboard, alertas};
 })();

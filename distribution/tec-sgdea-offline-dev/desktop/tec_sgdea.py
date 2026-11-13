@@ -67,6 +67,8 @@ class Desktop:
                         bordercolor=INDIGO)
         style.map('Nav.TButton', background=[('pressed', BLUE), ('active', '#38389B')],
                   foreground=[('disabled', '#D1D4EF')])
+        style.configure('NavActive.TButton', anchor='w', padding=(15, 10), background=BLUE,
+                        foreground=WHITE, bordercolor=WHITE)
         style.configure('Accent.TButton', background=INDIGO, foreground=WHITE)
         style.map('Accent.TButton', background=[('disabled', BORDER), ('active', VIOLET)],
                   foreground=[('disabled', MUTED)])
@@ -79,17 +81,39 @@ class Desktop:
 
         self.build_login()
         self.work_frame = ttk.Frame(root)
-        rail = tk.Frame(self.work_frame, bg=INDIGO, width=200)
+        rail = self.rail = tk.Frame(self.work_frame, bg=INDIGO, width=220)
         rail.pack(side='left', fill='y')
         rail.pack_propagate(False)
         tk.Frame(rail, bg=VIOLET, height=5).pack(fill='x')
         tk.Label(rail, text='TEC-SGDEA', font=('Segoe UI', 20, 'bold'), bg=INDIGO, fg=WHITE).pack(anchor='w', padx=14, pady=(22, 0))
         tk.Label(rail, text='Gestión documental', bg=INDIGO, fg=WHITE).pack(anchor='w', padx=15, pady=(0, 28))
-        self.navigation = []
-        for index, label in enumerate(('⌂   Inicio', '▤   Inventarios', '↻   Sincronización')):
-            button = ttk.Button(rail, text=label, style='Nav.TButton', command=lambda page=index: self.navigate(page))
-            button.pack(fill='x', padx=6, pady=2)
-            self.navigation.append(button)
+        home = ttk.Button(rail, text='⌂   Dashboard', style='Nav.TButton', command=lambda: self.navigate(0))
+        home.pack(fill='x', padx=6, pady=2)
+        self.navigation = [home]
+        self.nav_groups, self.nav_links = {}, {'home': home}
+        for label, options in (
+            ('▤  Inventarios', [('inventory', 'Consultar inventario', self.open_search)]),
+            ('▣  Expedientes', [('search','Buscar expediente', lambda: self.open_search('search')),
+                               ('draft','Nuevo borrador', self.new_draft), ('dossier','Abrir ficha', self.open_dossier)]),
+            ('▧  Gestión documental', [('attach','Adjuntar PDF', self.attach),
+                                       ('digital','Digitalización', lambda: self.open_dossier(0)),
+                                       ('sheet','Hoja de control', lambda: self.open_dossier(1))]),
+            ('↻  Seguimiento', [('trace','Trazabilidad', lambda: self.open_dossier(2)),
+                                ('sync','Cola de sincronización', lambda: self.navigate(2))])
+        ):
+            section = tk.Frame(rail, bg=INDIGO)
+            section.pack(fill='x', padx=6, pady=1)
+            panel = tk.Frame(section, bg=INDIGO)
+            title = ttk.Button(section, text='▸ '+label, style='Nav.TButton')
+            title.configure(command=lambda n=label: self.toggle_group(n))
+            title.pack(fill='x')
+            self.nav_groups[label] = (title, panel)
+            for key, name, command in options:
+                button = ttk.Button(panel, text='    '+name, style='Nav.TButton', command=command)
+                button.pack(fill='x')
+                self.nav_links[key] = button
+        for button in (*self.nav_links.values(), *(title for title, _ in self.nav_groups.values())):
+            button.bind('<Return>', lambda event: event.widget.invoke())
         self.actions['logout'] = ttk.Button(rail, text='Cerrar sesión', style='Nav.TButton', command=self.logout)
         self.actions['logout'].pack(side='bottom', fill='x', padx=6, pady=12)
         self.actions['reconnect'] = ttk.Button(rail, text='Volver a conectar', style='Nav.TButton', command=self.reconnect)
@@ -99,6 +123,9 @@ class Desktop:
         content.pack(fill='both', expand=True)
         header = ttk.Frame(content)
         header.pack(fill='x', pady=(0, 16))
+        self.menu_toggle = ttk.Button(header, text='☰ Menú', command=self.toggle_rail)
+        self.menu_toggle.pack(side='left', padx=(0, 10))
+        root.bind('<Escape>', self.close_rail_on_escape)
         self.page_title = tk.StringVar(value='Inicio')
         ttk.Label(header, textvariable=self.page_title, font=('Segoe UI', 23, 'bold')).pack(side='left')
         self.badge = tk.Label(header, textvariable=self.connection, bg=BLUE, fg=WHITE, padx=14,
@@ -160,6 +187,34 @@ class Desktop:
         ttk.Label(content, textvariable=self.status, foreground=MUTED, wraplength=790).pack(side='bottom', anchor='w', pady=(5, 0))
         self.login_frame.pack(fill='both', expand=True)
         self.login_email.focus_set()
+
+    def toggle_group(self, label):
+        title, panel = self.nav_groups[label]
+        opening = not panel.winfo_manager()
+        for other, (button, content) in self.nav_groups.items():
+            content.pack_forget()
+            button.configure(text='▸ '+other)
+        if opening:
+            panel.pack(fill='x')
+            title.configure(text='▾ '+label)
+
+    def toggle_rail(self):
+        if self.rail.winfo_manager():
+            self.rail.pack_forget()
+            self.menu_toggle.focus_set()
+        else:
+            self.rail.pack(side='left', fill='y', before=self.menu_toggle.master.master)
+            self.navigation[0].focus_set()
+
+    def close_rail_on_escape(self, event):
+        if str(event.widget).startswith(str(self.rail)+'.') and self.rail.winfo_manager():
+            self.toggle_rail()
+            return 'break'
+
+    def highlight_navigation(self, key):
+        self.active_navigation = key
+        for name, button in self.nav_links.items():
+            button.configure(style='NavActive.TButton' if name==key else 'Nav.TButton')
 
     def build_login(self):
         frame = self.login_frame = tk.Frame(self.root, bg=WHITE)
@@ -226,8 +281,9 @@ class Desktop:
         self.recent_empty = ttk.Label(self.dashboard, foreground=MUTED)
         self.recent_empty.pack(anchor='w', pady=4)
 
-    def open_search(self):
+    def open_search(self, key='inventory'):
         self.navigate(1)
+        self.highlight_navigation(key)
         self.search_entry.focus_set()
 
     def open_activity(self):
@@ -242,6 +298,7 @@ class Desktop:
         if self.mode == 'Bloqueado':
             return
         self.page_title.set(('Inicio', 'Inventarios y expedientes', 'Sincronización')[page])
+        self.highlight_navigation(('home','inventory','sync')[page])
         self.dashboard.pack_forget()
         self.module_body.pack_forget()
         if page == 0:
@@ -256,6 +313,9 @@ class Desktop:
     def tab_changed(self, _):
         if self.module_body.winfo_manager():
             self.page_title.set(('Inventarios y expedientes', 'Sincronización')[self.tabs.index('current')])
+            index = self.tabs.index('current')
+            if index or self.active_navigation not in ('inventory','search'):
+                self.highlight_navigation(('inventory','sync')[index])
         self.selection_changed()
 
     def apply_lock(self):
@@ -517,6 +577,11 @@ class Desktop:
         available['sync_home'] = available['sync']
         for key, button in self.actions.items():
             button.state(['!disabled'] if available[key] and not self.busy else ['disabled'])
+        for key, button in self.nav_links.items():
+            enabled = available.get(key, available['dossier'] if key in ('digital','sheet','trace') else opened)
+            if key == 'sync':
+                enabled = opened
+            button.state(['!disabled'] if enabled and not self.busy else ['disabled'])
 
     def download(self):
         code = self.selected()['code']
@@ -557,10 +622,14 @@ class Desktop:
         selection = self.queue.selection() if self.tabs.index('current')==1 else ()
         return next((row['code'] for row in self.operations if selection and row['id']==selection[0]), None)
 
-    def open_dossier(self):
+    def open_dossier(self, work_tab=None):
         code = self.dossier_code()
         if code:
-            self.perform('Abriendo ficha…', lambda: self.workspace.dossier(code), self.show_dossier)
+            if work_tab is None:
+                self.perform('Abriendo ficha…', lambda: self.workspace.dossier(code), self.show_dossier)
+            else:
+                self.perform('Abriendo trabajo documental…', lambda: self.workspace.work(code),
+                             lambda data: show_work(self, self.root, data, initial_tab=work_tab))
 
     def show_dossier(self, data):
         item, documents, operations = data
