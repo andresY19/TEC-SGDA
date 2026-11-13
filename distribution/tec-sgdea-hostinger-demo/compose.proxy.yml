@@ -1,0 +1,13 @@
+# Apply only when the demo virtual host is authorized.
+services:
+  web:
+    networks:
+      backend: {}
+      frontend: {}
+      proxy:
+        aliases: [tec-sgdea-demo-web]
+
+networks:
+  proxy:
+    external: true
+    name: nginx-central-edge

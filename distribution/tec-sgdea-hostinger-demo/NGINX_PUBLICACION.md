@@ -1,0 +1,8 @@
+# Publicación de la demostración
+
+- En hPanel, añadir un único A `demo-sgdea` → `2.24.85.237`, TTL 300 si el panel lo admite. Confirmar en ambos nameservers autoritativos.
+- Conectar solo el contenedor FastAPI de la demo a `nginx-central-edge` mediante el override existente, con alias `tec-sgdea-demo-web`. Verificar que PostgreSQL, Redis y Celery permanezcan en la red privada.
+- Añadir un archivo exclusivo en `/opt/nginx-central/releases/central-b3-1/http-enabled/` para `demo-sgdea.innovationsapps.cloud`, con ruta HTTP-01 bajo `/var/acme` en un directorio exclusivo. Antes de habilitarlo, validar con `nginx -t`; conservar huellas y comprobaciones HTTP de los sitios actuales.
+- Emitir con un cliente ACME independiente mediante HTTP-01 y guardar la cadena y la llave bajo `/opt/nginx-central/shared/tls/tec-sgdea/`. Probar primero el desafío y la validación con staging. Preparar renovación propia con prueba de configuración y recarga condicionada. Mantener el renovador de SaludPrograms intacto.
+- Añadir un archivo TLS exclusivo en `tls-enabled/`, proxy a `tec-sgdea-demo-web:8080`, con cabeceras de proxy, límite de carga y acceso restringido. Bloquear externamente `/offline/v1/`, OpenAPI y documentación técnica. Validar antes de cada recarga gradual; probar HTTPS externo y flujo sintético autenticado.
+- Rollback: retirar solo los archivos nuevos de los directorios incluidos, validar y recargar; desconectar únicamente FastAPI de la red compartida y retirar exclusivamente el A nuevo si fue creado en esta intervención. Conservar los certificados y volúmenes de la demo. Comprobar las aplicaciones existentes después de cada recarga.

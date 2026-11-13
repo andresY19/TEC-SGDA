@@ -1,0 +1,96 @@
+name: tec-sgdea-demo
+
+x-app: &app
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+  pull_policy: never
+  env_file: ./private/app.env
+  environment:
+    GEOLOGY_OFFLINE_DEV: ${DEMO_OFFLINE_SYNC:-0}
+    LEVANTAR_AL_CARGAR: "no"
+    GEOLOGY_LOCAL_PROJECT: tec-sgdea-demo
+    GEOLOGY_ENTORNO: local
+    GEOLOGY_COLA: tec-sgdea-demo-tasks
+    ANTHROPIC_API_KEY: ""
+    OPENAI_API_KEY: ""
+    GEMINI_API_KEY: ""
+    GEMINI_API_KEY_1: ""
+    GEMINI_API_KEY_2: ""
+    GEMINI_API_KEY_3: ""
+    GEMINI_API_KEY_4: ""
+    GEMINI_API_KEY_5: ""
+    GEMINI_API_KEY_6: ""
+    GEMINI_API_KEY_7: ""
+    AWS_ACCESS_KEY_ID: ""
+    AWS_SECRET_ACCESS_KEY: ""
+    AWS_S3_BUCKET: ""
+  tmpfs:
+    - /tmp:uid=10001,gid=10001,mode=1770
+    - /home/geology:uid=10001,gid=10001,mode=0700
+  volumes:
+    - deposito:/srv/geology/deposito
+    - expedidos:/srv/geology/expedidos
+  depends_on:
+    pg:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  pg:
+    image: ${PG_IMAGE:?Falta imagen PostgreSQL 15 fijada}
+    restart: unless-stopped
+    env_file: ./private/pg.env
+    networks: [backend]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 4s
+      retries: 10
+  redis:
+    image: ${REDIS_IMAGE:?Falta imagen Redis 7 fijada}
+    restart: unless-stopped
+    env_file: ./private/redis.env
+    command: [redis-server, /etc/sgdea/redis.conf]
+    networks: [backend]
+    volumes:
+      - redisdata:/data
+      - ./private/redis.conf:/etc/sgdea/redis.conf:ro
+      - ./private/users.acl:/etc/sgdea/users.acl:ro
+    healthcheck:
+      test: [CMD-SHELL, 'redis-cli --user health ping | grep -qx PONG']
+      interval: 10s
+      timeout: 4s
+      retries: 10
+  web:
+    <<: *app
+    image: ${WEB_IMAGE:?Falta imagen FastAPI fijada}
+    networks: [backend, frontend]
+    ports:
+      - "127.0.0.1:${DEMO_PORT:?Falta puerto local comprobado}:8080"
+    healthcheck:
+      test: [CMD, python, -c, "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8080/estado',timeout=3))['estado']=='operativo'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  worker:
+    <<: *app
+    image: ${WORKER_IMAGE:?Falta imagen Celery fijada}
+    networks: [backend]
+    cpus: 1
+    mem_limit: 1200m
+
+networks:
+  backend:
+    internal: true
+  frontend: {}
+volumes:
+  pgdata: {}
+  redisdata: {}
+  deposito: {}
+  expedidos: {}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Renovación TLS exclusiva de TEC-SGDEA
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/tec-sgdea-demo/renew-tls.py
+UMask=0077
+TimeoutStartSec=300

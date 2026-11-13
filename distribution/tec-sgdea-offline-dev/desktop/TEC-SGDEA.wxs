@@ -1,0 +1,42 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <?ifndef ProductName?>
+    <?define ProductName = "TEC-SGDEA"?>
+    <?define ProductUpgrade = "{0A66F576-77BC-4B40-8D1B-170BE1D04DBA}"?>
+    <?define ProductFolder = "TEC-SGDEA-Demostracion"?>
+    <?define MenuFolder = "TEC-SGDEA Demostración"?>
+    <?define ProductRegistry = "DemoMSI"?>
+    <?define ClientGuid = "{C6DC6980-72DE-4DB5-BC85-CF9C4E4DD17D}"?>
+    <?define MenuGuid = "{5ACF957D-6ED9-41B0-8F7D-A1ACD4C8209A}"?>
+  <?endif?>
+  <Package Name="$(var.ProductName)" Manufacturer="TEC-SGDEA" Version="$(var.PackageVersion)"
+           UpgradeCode="$(var.ProductUpgrade)" Scope="perUser">
+    <MajorUpgrade DowngradeErrorMessage="Ya está instalada una versión más reciente de TEC-SGDEA." />
+    <MediaTemplate EmbedCab="yes" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsLocal" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductFolder)">
+          <Component Id="Client" Guid="$(var.ClientGuid)">
+            <File Id="ClientExe" Name="TEC-SGDEA.exe" Source="$(var.ClientPath)" />
+            <RegistryValue Root="HKCU" Key="Software\TEC-SGDEA\$(var.ProductRegistry)" Name="Client"
+                           Type="integer" Value="1" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="DemoMenu" Name="$(var.MenuFolder)">
+        <Component Id="Menu" Guid="$(var.MenuGuid)">
+          <Shortcut Id="StartClient" Name="$(var.ProductName)" Target="[#ClientExe]" WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveDemoMenu" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\TEC-SGDEA\$(var.ProductRegistry)" Name="Shortcut"
+                         Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="Application">
+      <ComponentRef Id="Client" />
+      <ComponentRef Id="Menu" />
+    </Feature>
+  </Package>
+</Wix>

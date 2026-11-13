@@ -1,0 +1,10 @@
+[Unit]
+Description=Comprobación diaria TLS de TEC-SGDEA
+
+[Timer]
+OnCalendar=*-*-* 07:23:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
