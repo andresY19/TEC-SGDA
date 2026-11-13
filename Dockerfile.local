@@ -1,0 +1,52 @@
+# Variante local: conserva Dockerfile original; resuelve la ruta del instalador veraPDF.
+# GEOLOGY Â· Plataforma de organizaciÃ³n y descripciÃ³n documental
+# Contrato 733 de 2026 Â· Servicio GeolÃ³gico Colombiano Â· Hometic SAS
+#
+# La versiÃ³n de Debian va fijada a propÃ³sito: la etiqueta Â«slimÂ» a secas sigue a la Debian
+# del momento y, cuando esa cambia, los nombres de los paquetes del sistema cambian con ella.
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    TZ=America/Bogota
+
+WORKDIR /srv/geology
+
+# libpq5 es la biblioteca cliente de PostgreSQL que necesita psycopg2-binary.
+# El resto es el motor de recepciÃ³n tÃ©cnica de lo digitalizado:
+#   tesseract-ocr + spa   reconocimiento de texto en espaÃ±ol para la copia de consulta
+#   ghostscript           conversiÃ³n a PDF/A (formato de preservaciÃ³n) y copia liviana
+#   unpaper               enderezado y recorte de bordes
+#   qpdf                  reparaciÃ³n de documentos portÃ¡tiles
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpq5 curl unzip default-jre-headless \
+        tesseract-ocr tesseract-ocr-spa \
+        ghostscript unpaper qpdf \
+    && rm -rf /var/lib/apt/lists/*
+
+# veraPDF: el validador de referencia de PDF/A. Sin Ã©l la plataforma solo puede decir lo que un
+# archivo DECLARA ser; con Ã©l comprueba el cumplimiento real contra el estÃ¡ndar ISO 19005.
+COPY scripts/verapdf-auto.xml /tmp/verapdf-auto.xml
+RUN cd /tmp \
+    && curl -fsSL -o verapdf.zip https://software.verapdf.org/releases/verapdf-installer.zip \
+    && unzip -q verapdf.zip \
+    && VERAPDF_JAR="$(find /tmp -type f -name 'verapdf-izpack-installer-*.jar' -print -quit)" \
+    && test -n "$VERAPDF_JAR" \
+    && java -DINSTALL_PATH=/opt/verapdf -jar "$VERAPDF_JAR" /tmp/verapdf-auto.xml \
+    && rm -rf /tmp/verapdf* \
+    && /opt/verapdf/verapdf --version
+ENV VERAPDF_BIN=/opt/verapdf/verapdf
+
+COPY requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+COPY requirements.local.txt .
+RUN pip install -r requirements.local.txt && pip check
+
+COPY geology ./geology
+
+EXPOSE 8080
+
+CMD ["uvicorn", "geology.main:aplicacion", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,11 @@
+# Política de autorización del destino · 14L v1.0
+
+**Versión final para aprobación expresa.** Estado PENDING_APPROVAL. Destino geology-local-20261106-57a99a. Candidata 2.13.0-rc.3-14h. Alcance exclusivo de conciliación documental.
+
+1. Aplicar denegación por defecto. La política futura usa propósito operation, un worker aprobado y raíz /srv/geology/deposito. Cada permiso habilita una sola operación reconcile, con evidencias vinculadas por huella, un único consumo y plazo máximo de 300 segundos. La segunda firma vincula el permiso al desafío del proceso y vence en hasta 30 segundos.
+2. Aprovisionar la política en una ventana expresamente autorizada, conforme a 14I. El responsable coteja IDs completos, imágenes por digest, redes, montajes, volúmenes, clúster PostgreSQL, rol restringido y testigos PostgreSQL, Redis y de almacenamiento. Incorporar la fotografía de los recursos efectivos de la candidata. El ensayo 14H solo usó recursos del clon y 14I verificó allí la captura con propósito operation.
+3. Custodiar dos claves Ed25519 independientes y el ledger en almacenamiento privado del anfitrión. Registrar el hash del binario Node y comprobar que la política pública montada coincide con la del anfitrión, es de solo lectura, pertenece a root y queda fuera de escritura del UID 10001. Mantener la ejecución sin privilegios y sin socket Docker en la aplicación.
+4. Registrar el consumo en el ledger antes de enviar la atestación. Conservar recibo, hashes y resultado. Código 0 indica conciliación, 2 revisión humana y 77 denegación. Ante ejecución incierta, revisar las evidencias y obtener otro permiso para el reintento. Una identidad, configuración o alcance distintos requieren nueva verificación antes de operar.
+5. Mantener inactivo el [borrador operativo de 14I](../tec-archiva-14i-a01/Politica_destino.borrador.json). La aprobación de esta política de diseño es independiente de autorizar el arranque, la actualización y la emisión de un permiso concreto. El respaldo al corte y su restauración de verificación pertenecen a la ventana futura.
+
+La [evidencia 14L](Evidencia_lectura_14L.json) identifica las referencias cotejadas. El [registro de aprobación](Registro_aprobacion_politica.md) contiene la huella de esta versión.

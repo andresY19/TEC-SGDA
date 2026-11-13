@@ -1,0 +1,473 @@
+--- a/geology/nucleo/pases.py
++++ b/geology/nucleo/pases.py
+@@ -82,7 +82,7 @@
+     return mensaje.decode("ascii") + "." + _b64(firma)
+ 
+ 
+-def leer_pase(pase: str) -> str | None:
++def detalles_pase(pase: str) -> dict | None:
+     """Devuelve correo autenticado o None; no registra tokens ni errores internos."""
+     try:
+         if not isinstance(pase, str) or len(pase) > 2048:
+@@ -110,6 +110,13 @@
+             return None
+         if not isinstance(datos["jti"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{22}", datos["jti"]):
+             return None
+-        return _correo(datos["sub"])
++        _correo(datos["sub"])
++        return datos
+     except (ValueError, TypeError, UnicodeError, RuntimeError, RecursionError):
+         return None
++
++
++def leer_pase(pase: str) -> str | None:
++    """Sólo firma y expiración. Autorizar requiere además sesiones.validar()."""
++    claims = detalles_pase(pase)
++    return claims["sub"] if claims else None
+--- /dev/null
++++ b/geology/nucleo/sesiones.py
+@@ -0,0 +1,113 @@
++"""Registro revocable, de aceptación explícita y persistencia confirmada en Redis.
++
++Sin DDL ni conexiones al importar. Una caída o pérdida del registro deniega acceso.
++Sólo se almacenan identificadores HMAC, generaciones aleatorias y vínculos HMAC
++a la huella de contraseña; nunca pases, contraseñas ni huellas PBKDF2 completas.
++"""
++import hashlib
++import hmac
++import json
++import os
++import re
++import secrets
++import time
++from urllib.parse import urlsplit
++
++import redis
++from geology.nucleo import pases
++
++
++class SesionesNoDisponibles(RuntimeError):
++    def __init__(self):
++        super().__init__('El registro de sesiones no está disponible; no se autorizó la operación.')
++
++
++def _cliente():
++    try:
++        project=os.environ.get('GEOLOGY_LOCAL_PROJECT','')
++        url=os.environ.get('AUTH_REDIS_URL','');u=urlsplit(url)
++        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}',project):raise ValueError()
++        if u.scheme not in ('redis','rediss') or not u.hostname or (not re.fullmatch(r'/[0-9]+',u.path) or int(u.path[1:])<2):raise ValueError()
++        if u.query or u.fragment:raise ValueError()
++        return redis.Redis.from_url(url,decode_responses=True,socket_timeout=4,
++                                    socket_connect_timeout=2,retry_on_timeout=False),project+':auth:v1:'
++    except Exception:
++        raise SesionesNoDisponibles() from None
++
++
++def _digest(kind,value):
++    return hmac.digest(pases._llave(),('geology-auth-v1:'+kind+':'+value).encode(),hashlib.sha256).hex()
++
++
++def _keys(prefix,claims):
++    return prefix+'u:'+_digest('user',claims['sub']),prefix+'s:'+_digest('session',claims['jti'])
++
++
++def _durable(client,script,keys,args):
++    try:
++        # Same Redis connection: WAITAOF must cover the preceding mutation.
++        with client.pipeline(transaction=False) as pipeline:
++            pipeline.eval(script,len(keys),*keys,*args)
++            pipeline.execute_command('WAITAOF',1,0,2000)
++            result,ack=pipeline.execute()
++        if not isinstance(ack,list) or ack[0]<1:raise ValueError()
++        return result
++    except Exception:
++        raise SesionesNoDisponibles() from None
++    finally:
++        client.close()
++
++
++REGISTER="""
++local generation=redis.call('GET',KEYS[1])
++if not generation then generation=ARGV[1];redis.call('SET',KEYS[1],generation) end
++local data=cjson.encode({g=generation,c=ARGV[2]})
++return redis.call('SET',KEYS[2],data,'EX',ARGV[3],'NX')
++"""
++CHECK="""
++local data=redis.call('GET',KEYS[2])
++local generation=redis.call('GET',KEYS[1])
++if not data or not generation then return false end
++local parsed=cjson.decode(data)
++if parsed.g~=generation then return false end
++return data
++"""
++
++
++def registrar(pase,clave_hash):
++    claims=pases.detalles_pase(pase)
++    if not claims:raise ValueError('Pase inválido; no se registró sesión.')
++    client,prefix=_cliente();keys=_keys(prefix,claims)
++    ttl=claims['exp']-int(time.time())
++    if ttl<=0:raise ValueError('Pase vencido; no se registró sesión.')
++    result=_durable(client,REGISTER,keys,[secrets.token_hex(16),_digest('credential',clave_hash),ttl])
++    if result!='OK':raise SesionesNoDisponibles()
++
++
++def validar(pase,clave_hash):
++    claims=pases.detalles_pase(pase)
++    if not claims:return False
++    client=None
++    try:
++        client,prefix=_cliente();raw=client.eval(CHECK,2,*_keys(prefix,claims))
++        if raw is None:return False
++        data=json.loads(raw)
++        return isinstance(data,dict) and isinstance(data.get('c'),str) and hmac.compare_digest(data['c'],_digest('credential',clave_hash))
++    except SesionesNoDisponibles:raise
++    except Exception:
++        raise SesionesNoDisponibles() from None
++    finally:
++        if client is not None:client.close()
++
++
++def invalidar_usuario(correo):
++    client,prefix=_cliente()
++    _durable(client,"return redis.call('SET',KEYS[1],ARGV[1])",
++             [prefix+'u:'+_digest('user',correo)],[secrets.token_hex(16)])
++
++
++def revocar(pase):
++    claims=pases.detalles_pase(pase)
++    if not claims:return
++    client,prefix=_cliente();_,key=_keys(prefix,claims)
++    _durable(client,"return redis.call('DEL',KEYS[1])",[key],[])
+--- a/geology/rutas/cuentas.py
++++ b/geology/rutas/cuentas.py
+@@ -18,6 +18,7 @@
+ from sqlalchemy.orm import Session
+ 
+ from geology.nucleo.bd import obtener_sesion
++from geology.nucleo import sesiones
+ from geology.nucleo.pases import GEOLOGY_HORAS_SESION, crear_pase, leer_pase, llave_configurada
+ from geology.modelos import UsuarioBD, cifrar_clave, clave_correcta
+ from geology.dominio.estados import Funcion, Rol, Usuario
+@@ -75,7 +76,7 @@
+ 
+ # Lo único que una cuenta de la entidad puede pedir. Todo lo demás —cargue, hojas en proceso,
+ # reparto de trabajo, centro de control— le responde 403 aunque conozca la dirección.
+-RUTAS_DE_LA_ENTIDAD = ("/consulta", "/cuentas/yo", "/cuentas/cambiar-clave", "/estado")
++RUTAS_DE_LA_ENTIDAD = ("/consulta", "/cuentas/yo", "/cuentas/cambiar-clave", "/cuentas/salir", "/estado")
+ 
+ 
+ def usuario_actual(request: Request, authorization: str = Header(default=""),
+@@ -89,10 +90,16 @@
+         raise HTTPException(401, "Su sesión venció o el pase no es válido. Vuelva a ingresar.")
+     u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo, UsuarioBD.activo.is_(True)).first()
+     if not u:
+-        raise HTTPException(403, "Su usuario ya no está activo en GEOLOGY.")
++        raise HTTPException(401, "Su sesión venció o el pase no es válido. Vuelva a ingresar.")
++    try:
++        vigente = sesiones.validar(pase, u.clave_hash)
++    except sesiones.SesionesNoDisponibles:
++        raise HTTPException(503, "El registro de sesiones no está disponible.") from None
++    if not vigente:
++        raise HTTPException(401, "Su sesión venció o fue revocada. Vuelva a ingresar.")
+     # Excepciones exactas por método y ruta; ningún prefijo habilita otras APIs.
+     if u.debe_cambiar_clave and (request.method, request.url.path) not in {
+-        ("GET", "/cuentas/yo"), ("POST", "/cuentas/cambiar-clave"),
++        ("GET", "/cuentas/yo"), ("POST", "/cuentas/cambiar-clave"), ("POST", "/cuentas/salir"),
+     }:
+         raise HTTPException(403, "Debe cambiar su contraseña provisional antes de continuar.")
+     if u.rol == Rol.ENTIDAD.value and not request.url.path.startswith(RUTAS_DE_LA_ENTIDAD):
+@@ -124,12 +131,29 @@
+     }
+ 
+ 
++def _invalidar_sesiones(correo):
++    try:
++        sesiones.invalidar_usuario(correo)
++    except sesiones.SesionesNoDisponibles:
++        raise HTTPException(503, "El registro de sesiones no está disponible; no se confirmó el cambio.") from None
++
++
++@router.post("/salir", summary="Revocar la sesión actual")
++def salir(request: Request, quien: Usuario = Depends(usuario_actual)) -> dict:
++    pase = request.headers.get("authorization", "")[7:].strip()
++    try:
++        sesiones.revocar(pase)
++    except sesiones.SesionesNoDisponibles:
++        raise HTTPException(503, "No se confirmó el cierre de sesión. Intente de nuevo.") from None
++    return {"mensaje": "Sesión revocada."}
++
++
+ @router.post("/ingresar", summary="Ingresar con correo y contraseña")
+ def ingresar(datos: Ingreso, db: Session = Depends(obtener_sesion)) -> dict:
+     if not llave_configurada():
+         raise HTTPException(503, "El servicio de sesiones no está configurado.")
+     correo = datos.correo.strip().lower()
+-    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo).first()
++    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo).populate_existing().with_for_update().first()
+ 
+     # El mismo mensaje para correo inexistente y clave errada, para no revelar quién existe.
+     generico = "El correo o la contraseña no coinciden."
+@@ -147,8 +171,13 @@
+ 
+     u.intentos_fallidos = 0
+     u.ultimo_ingreso = datetime.now()
+-    db.commit()
+-    return {"pase": crear_pase(u.correo), "horas": GEOLOGY_HORAS_SESION,
++    pase = crear_pase(u.correo)
++    try:
++        sesiones.registrar(pase, u.clave_hash)
++    except sesiones.SesionesNoDisponibles:
++        raise HTTPException(503, "El registro de sesiones no está disponible.") from None
++    db.commit()
++    return {"pase": pase, "horas": GEOLOGY_HORAS_SESION,
+             "usuario": _ficha(u),
+             "aviso_llave": None}
+ 
+@@ -156,17 +185,23 @@
+ @router.post("/cambiar-clave", summary="Cambiar la propia contraseña")
+ def cambiar_clave(datos: CambioDeClave, db: Session = Depends(obtener_sesion),
+                   quien: Usuario = Depends(usuario_actual)) -> dict:
+-    u = db.query(UsuarioBD).filter(UsuarioBD.correo == quien.correo).first()
++    u = db.query(UsuarioBD).filter(UsuarioBD.correo == quien.correo).populate_existing().with_for_update().first()
+     if not clave_correcta(datos.clave_actual, u.clave_hash):
+         raise HTTPException(401, "La contraseña actual no coincide.")
+     if datos.clave_nueva == datos.clave_actual:
+         raise HTTPException(422, "La contraseña nueva debe ser distinta de la actual.")
+     if len(datos.clave_nueva) < LARGO_MINIMO:
+         raise HTTPException(422, f"La contraseña debe tener al menos {LARGO_MINIMO} caracteres.")
++    _invalidar_sesiones(u.correo)
+     u.clave_hash = cifrar_clave(datos.clave_nueva)
+     u.debe_cambiar_clave = False
+     db.commit()
+-    return {"mensaje": "Contraseña cambiada. Su clave anterior ya no sirve."}
++    nuevo_pase = crear_pase(u.correo)
++    try:
++        sesiones.registrar(nuevo_pase, u.clave_hash)
++    except sesiones.SesionesNoDisponibles:
++        raise HTTPException(503, "Contraseña actualizada; vuelva a ingresar cuando el registro de sesiones esté disponible.") from None
++    return {"mensaje": "Contraseña cambiada. Las sesiones anteriores fueron revocadas.", "pase": nuevo_pase, "horas": GEOLOGY_HORAS_SESION}
+ 
+ 
+ @router.get("/yo", summary="Quién soy y qué puedo hacer")
+@@ -190,11 +225,12 @@
+     """
+     if quien.rol is not Rol.ADMINISTRADORA:
+         raise HTTPException(403, "Restablecer contraseñas lo hace la dirección del proyecto.")
+-    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).first()
++    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).populate_existing().with_for_update().first()
+     if not u:
+         raise HTTPException(404, f"{correo} no está registrado.")
+     import secrets
+     provisional = "Geology-" + secrets.token_urlsafe(6)
++    _invalidar_sesiones(u.correo)
+     u.clave_hash = cifrar_clave(provisional)
+     u.debe_cambiar_clave = True
+     u.intentos_fallidos = 0
+@@ -258,7 +294,7 @@
+ def cambiar(correo: str, datos: CambioDeCuenta, db: Session = Depends(obtener_sesion),
+             quien: Usuario = Depends(usuario_actual)) -> dict:
+     _solo_direccion(quien)
+-    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).first()
++    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).populate_existing().with_for_update().first()
+     if not u:
+         raise HTTPException(404, f"{correo} no está registrado.")
+     if datos.rol is not None or datos.funcion is not None:
+@@ -267,6 +303,8 @@
+         raise HTTPException(409, "No puede desactivar su propia cuenta.")
+     if u.correo == quien.correo and datos.rol not in (None, Rol.ADMINISTRADORA.value):
+         raise HTTPException(409, "No puede quitarse a sí misma el rol de administradora.")
++    if datos.activo is False:
++        _invalidar_sesiones(u.correo)
+     for campo in ("nombre", "cargo", "rol", "funcion", "activo"):
+         valor = getattr(datos, campo)
+         if valor is not None:
+@@ -286,7 +324,7 @@
+     cambia.
+     """
+     _solo_direccion(quien)
+-    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).first()
++    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).populate_existing().with_for_update().first()
+     if not u:
+         raise HTTPException(404, f"{correo} no está registrado.")
+     if u.rol != Rol.ENTIDAD.value:
+@@ -317,7 +355,7 @@
+     la entidad.
+     """
+     _solo_direccion(quien)
+-    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).first()
++    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).populate_existing().with_for_update().first()
+     if not u:
+         raise HTTPException(404, f"{correo} no está registrado.")
+     if u.rol in (Rol.ADMINISTRADORA.value, Rol.CONSULTA.value, Rol.ENTIDAD.value):
+@@ -339,7 +377,7 @@
+     No aplica a la administradora ni a los perfiles de consulta o de la entidad.
+     """
+     _solo_direccion(quien)
+-    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).first()
++    u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo.strip().lower()).populate_existing().with_for_update().first()
+     if not u:
+         raise HTTPException(404, f"{correo} no está registrado.")
+     if u.rol in (Rol.ADMINISTRADORA.value, Rol.CONSULTA.value, Rol.ENTIDAD.value):
+--- a/geology/main.py
++++ b/geology/main.py
+@@ -79,7 +79,10 @@
+     db = SesionLocal()
+     try:
+         u = db.query(UsuarioBD).filter(UsuarioBD.correo == correo).first()
+-        if not u:
++        if not u or not u.activo:
++            return
++        from geology.nucleo.sesiones import validar
++        if not validar(pase, u.clave_hash):
+             return
+         archivo = ""
+         m = re.search(r'filename="?([^";]+)', respuesta.headers.get("content-disposition", ""))
+--- a/geology/interfaz/index.html
++++ b/geology/interfaz/index.html
+@@ -218,6 +218,7 @@
+       <input id="claveNueva2" type="password" autocomplete="new-password">
+       <p class="err" id="errCambio"></p>
+       <button class="btn" id="btnCambiar" style="width:100%">Cambiar y entrar</button>
++      <button class="btn2" onclick="salirDeLaSesion()">Cerrar sesión</button>
+     </div>
+ 
+     <p class="pie">Su contraseña no se guarda en ninguna parte: el sistema conserva solo su
+@@ -231,7 +232,7 @@
+   <div class="env hcab">
+     <div class="hmarca">GEO<span>LOGY</span></div>
+     <div class="hquien">
+-      <b id="quienNombre">—</b>
++      <button class="btn2" onclick="salirDeLaSesion()">Cerrar sesión</button><b id="quienNombre">—</b>
+       <span id="quienCargo">Contrato 733 de 2026 · Servicio Geológico Colombiano</span>
+       <span class="hrol" id="quienRol">—</span>
+     </div>
+@@ -1373,6 +1374,14 @@
+ }
+ 
+ /* ----------------------------------------------------------------- ingreso */
++async function salirDeLaSesion(){
++  try {
++    await pedir("/cuentas/salir", {method:"POST"});
++    latir(false); PASE = null; SESION = null;
++    window.location.reload();
++  } catch (e) { alert("No se confirmó el cierre de sesión: " + e.message); }
++}
++
+ async function entrar(){
+   const correo = document.getElementById("correo").value.trim();
+   const clave  = document.getElementById("clave").value;
+@@ -1411,8 +1420,9 @@
+   const boton = document.getElementById("btnCambiar");
+   boton.disabled = true; boton.textContent = "Cambiando…";
+   try {
+-    await pedir("/cuentas/cambiar-clave", { method:"POST", body: JSON.stringify({
++    const cambio = await pedir("/cuentas/cambiar-clave", { method:"POST", body: JSON.stringify({
+       clave_actual: document.getElementById("clave").value, clave_nueva: nueva }) });
++    PASE = cambio.pase;
+     SESION = await pedir("/cuentas/yo");
+     abrirPlataforma();
+   } catch (e) { error.textContent = e.message; }
+--- a/tests/test_sesiones_seguras.py
++++ b/tests/test_sesiones_seguras.py
+@@ -38,6 +38,21 @@
+     def tearDownClass(cls):
+         cls.stack.close()
+ 
++    def setUp(self):
++        # Mock only the storage boundary; signature/expiry and route rules remain real.
++        records = {}; generations = {}
++        def register(token, credential):
++            claims = self.pases.detalles_pase(token)
++            records[claims['jti']] = (credential, generations.get(claims['sub'], 0))
++        def validate(token, credential):
++            claims = self.pases.detalles_pase(token)
++            return bool(claims and records.get(claims['jti']) == (credential, generations.get(claims['sub'], 0)))
++        def invalidate(correo): generations[correo] = generations.get(correo, 0) + 1
++        def revoke(token): records.pop(self.pases.detalles_pase(token)['jti'], None)
++        for name, fn in [('registrar',register),('validar',validate),('invalidar_usuario',invalidate),('revocar',revoke)]:
++            patcher = patch.object(self.cuentas.sesiones, name, side_effect=fn)
++            patcher.start();self.addCleanup(patcher.stop)
++
+     def cuenta(self, provisional=False, activo=True, rol='equipo'):
+         return self.UsuarioBD(nombre='Persona sintética',correo='persona@example.invalid',
+             cargo=None,rol=rol,funcion='Ambas',clave_hash='synthetic',activo=activo,
+@@ -45,6 +60,9 @@
+ 
+     def db(self, cuenta):
+         db = Mock()
++        q = db.query.return_value.filter.return_value
++        q.populate_existing.return_value = q
++        q.with_for_update.return_value = q
+         # Comprueba que el consumidor filtra la actividad y correo al autenticar.
+         def filter_(*condiciones):
+             texto=' '.join(str(c) for c in condiciones)
+@@ -59,7 +77,10 @@
+     def autenticar(self, cuenta, ruta='/cuentas', metodo='GET', token=None):
+         request=self.Request({'type':'http','method':metodo,'path':ruta,'headers':[],
+             'scheme':'http','server':('test.invalid',80),'query_string':b''})
+-        return self.cuentas.usuario_actual(request, 'Bearer '+(token or self.pases.crear_pase('persona@example.invalid')),self.db(cuenta))
++        if token is None:
++            token = self.pases.crear_pase('persona@example.invalid')
++            if cuenta: self.cuentas.sesiones.registrar(token, cuenta.clave_hash)
++        return self.cuentas.usuario_actual(request, 'Bearer '+token,self.db(cuenta))
+ 
+     def rechaza(self, cuenta, ruta='/cuentas', metodo='GET', status=403):
+         from fastapi import HTTPException
+@@ -140,10 +161,10 @@
+             self.assertNotIn(valor,str(error.exception)) if valor=='secreto' else None
+ 
+     def test_14_cuenta_inactiva(self):
+-        self.rechaza(self.cuenta(activo=False))
++        self.rechaza(self.cuenta(activo=False),status=401)
+ 
+     def test_15_cuenta_inexistente(self):
+-        self.rechaza(None)
++        self.rechaza(None,status=401)
+ 
+     def test_16_provisional_bloquea_roles_incluso_admin(self):
+         from geology.dominio.estados import Rol
+@@ -274,6 +295,7 @@
+ 
+     def test_34_desactivacion_revoca_acceso_con_token_valido(self):
+         u=self.cuenta(); token=self.pases.crear_pase(u.correo)
++        self.cuentas.sesiones.registrar(token,u.clave_hash)
+         self.assertIsNotNone(self.autenticar(u,token=token))
+         u.activo=False
+         from fastapi import HTTPException
+--- /dev/null
++++ b/tests/test_registro_sesiones.py
+@@ -0,0 +1,32 @@
++"""Casos del nuevo contrato; Redis real se certifica mediante HTTP en aislamiento."""
++import os
++import unittest
++from unittest.mock import patch
++from geology.nucleo import pases, sesiones
++
++
++class RegistroSesiones(unittest.TestCase):
++    def test_01_invalid_crypto_never_contacts_storage(self):
++        with patch.object(sesiones,'_cliente',side_effect=AssertionError('unexpected Redis')) as client:
++            self.assertFalse(sesiones.validar('invalid', 'synthetic'))
++            client.assert_not_called()
++
++    def test_02_configuration_failure_is_sanitized(self):
++        for url in ['', 'redis://:synthetic-private@host/0','https://host/2']:
++            with patch.dict(os.environ,{'AUTH_REDIS_URL':url,'GEOLOGY_LOCAL_PROJECT':'session-unit'}):
++                with self.assertRaises(sesiones.SesionesNoDisponibles) as ctx:
++                    sesiones._cliente()
++                self.assertNotIn('synthetic-private',str(ctx.exception))
++
++    def test_03_storage_keys_do_not_expose_identity_or_token_id(self):
++        with patch.dict(os.environ,{'GEOLOGY_CLAVE':'unit-only-key-'*4}):
++            claims={'sub':'synthetic@example.invalid','jti':'A'*22}
++            keys=sesiones._keys('project:auth:v1:',claims)
++            self.assertTrue(all(claims['sub'] not in x and claims['jti'] not in x for x in keys))
++            self.assertNotEqual(*keys)
++
++    def test_04_claims_keep_existing_crypto_contract(self):
++        with patch.dict(os.environ,{'GEOLOGY_CLAVE':'unit-only-key-'*4}):
++            token=pases.crear_pase('synthetic@example.invalid')
++            self.assertEqual(pases.detalles_pase(token)['sub'],pases.leer_pase(token))
++            self.assertTrue(token.startswith('g1.'))

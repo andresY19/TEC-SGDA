@@ -1,0 +1,2 @@
+FROM geology-local-20261106-57a99a:2.13.0
+RUN pip install --no-cache-dir --only-binary=:all: kombu==5.4.2 && pip check

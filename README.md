@@ -9,3 +9,5 @@ Código fuente de la aplicación web, el cliente Windows y la configuración de 
 La web TEC-SGDEA parte de la distribución rc.3. Para preparar su código, copie el directorio base a un contexto de trabajo y ejecute `build_overlay.py <base> <contexto>`. Ejecute `backend/patch_sheet.py <contexto>/geology/rutas/unidades.py` sobre esa copia limpia y copie `backend/offline_sync.py` a `<contexto>/geology/rutas/offline_sync.py`. Los scripts SQL de sincronización están en `backend/`.
 
 El Compose de demostración requiere imágenes verificadas, configuración privada y una base exclusiva. El repositorio contiene el código y las plantillas de despliegue.
+
+El árbol de la raíz conserva el código GEOLOGY, la configuración Docker original y local, las pruebas y los scripts. `distribution/` incluye el código y las configuraciones de las candidatas históricas. `docs/` reúne la documentación textual. Los archivos de evidencia generados, instaladores y datos operativos permanecen en el equipo.

@@ -1,0 +1,4 @@
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+USER 10001:10001
+CMD ["python", "-B", "/opt/geology-distribution/run_worker.py"]

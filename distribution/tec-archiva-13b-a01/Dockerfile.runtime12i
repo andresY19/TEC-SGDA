@@ -1,0 +1,8 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+USER 0:0
+COPY --chown=0:0 geology/interfaz/index.html geology/interfaz/accesibilidad12f.js /srv/geology/geology/interfaz/
+COPY --chown=0:0 geology/rutas/cuentas.py /srv/geology/geology/rutas/cuentas.py
+COPY --chown=0:0 build-manifest.json /opt/geology-distribution/build-manifest.json
+RUN chmod 0644 /srv/geology/geology/interfaz/index.html /srv/geology/geology/interfaz/accesibilidad12f.js /srv/geology/geology/rutas/cuentas.py
+USER 10001:10001

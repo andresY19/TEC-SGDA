@@ -1,0 +1,121 @@
+--- a/geology/interfaz/index.html
++++ b/geology/interfaz/index.html
+@@ -1888,11 +1888,11 @@
+     ? "<span class='flecha" + (abierta ? " abierta" : "") + "'>▸</span> " : "";
+ 
+   let fila = "<tr class='carpeta' onclick=\"abrirPartes('" + f.carpeta + "')\">" +
+-    "<td class='mono'>" + flecha + esc(f.carpeta) + "</td>" +
++    "<td class='mono'>" + (partes > 1 ? "<button class='btn2' data-partes='"+esc(f.carpeta)+"' aria-expanded='"+abierta+"' onclick=\"event.stopPropagation();abrirPartes('"+f.carpeta+"')\">Partes de "+esc(f.carpeta)+"</button>" : esc(f.carpeta)) + "</td>" +
+     "<td>" + que + "</td>" +
+     "<td class='mono'>" + esc(f.ultima ? fechaBonita(f.ultima) : "—") + "</td>" +
+     "<td>" + estado + "</td>" +
+-    "<td onclick='event.stopPropagation()'>" + accionesDe(f) + "</td></tr>";
++    "<td onclick='event.stopPropagation()'><button class='btn2' onclick=\"verFichaLectura('"+f.carpeta+"')\">Ver ficha</button> " + accionesDe(f) + "</td></tr>";
+ 
+   if (abierta && partes) {
+     fila += "<tr class='partes'><td colspan='5'>" +
+@@ -1954,6 +1954,7 @@
+ function abrirPartes(carpeta){
+   PROCESO.abiertas[carpeta] = !PROCESO.abiertas[carpeta];
+   pintarProceso();
++  document.querySelectorAll("[data-partes]").forEach(b=>{if(b.dataset.partes===carpeta)b.focus();});
+ }
+ 
+ /* La tabla corta de la pantalla de Hoja de control. Estaba llamándose sin existir y por eso
+@@ -2568,6 +2569,7 @@
+ let FICHA_ABIERTA = "";
+ 
+ async function verFicha(carpeta){
++  if (SESION && (SESION.rol === "consulta" || SESION.es_entidad)) return verFichaLectura(carpeta);
+   try {
+     const f = await pedir("/unidades/"+carpeta);
+     const traza = await pedir("/unidades/"+carpeta+"/trazabilidad").catch(()=>[]);
+@@ -2711,7 +2713,7 @@
+       tarjeta(esc(f.caja_trabajo||"—"), "Caja de trabajo (contrato 733)","","")+
+       tarjeta(esc(f.caja_definitiva||"—"), "Caja definitiva", f.carpeta_nueva?("carpeta "+f.carpeta_nueva):"", "apr")+
+       tarjeta(esc(f.estado), "Estado actual","", CLASE_ESTADO[f.estado]||"")+
+-      "</div><div style='margin-top:14px'><button class='btn2' onclick=\"verFicha('"+f.codigo_carpeta+"')\">Ver la ficha completa</button></div>"+
++      "</div><div style='margin-top:14px'><button class='btn2' onclick=\"verFichaLectura('"+f.codigo_carpeta+"')\">Ver la ficha completa</button></div>"+
+       "<div id='fichaRevision2'></div>";
+   } catch (e) { aviso("resultadoBusqueda","mal", esc(e.message)); }
+ }
+@@ -5040,5 +5042,6 @@
+ window.addEventListener("beforeunload", e => { if (DOC.sucio) { e.preventDefault(); e.returnValue = ""; } });
+ 
+ </script>
++<script src="/recursos/accesibilidad12f.js"></script>
+ </body>
+ </html>
+--- /dev/null
++++ b/geology/interfaz/accesibilidad12f.js
+@@ -0,0 +1,60 @@
++/* Candidate 12F: navigation and accessibility only. No document or archival writes. */
++(() => {
++'use strict';
++const $=id=>document.getElementById(id);
++const css=document.createElement('style');css.textContent=`:root{--texto3:#65594f;--ocre:#865018}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:3px solid #155aab;outline-offset:3px}.salto12f{position:fixed;left:8px;top:-100px;z-index:100;background:white;padding:12px}.salto12f:focus{top:8px}.sr12f{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}button:disabled{cursor:not-allowed}.vista[aria-busy=true]{border-top:3px solid #155aab}caption{text-align:left;font-weight:bold;padding:6px}#fichaLectura12f{max-width:1180px;margin:20px auto;padding:20px}#fichaLectura12f dt{font-weight:bold}#fichaLectura12f dd{margin:0 0 12px;overflow-wrap:anywhere}nav{scrollbar-width:auto}`;document.head.append(css);
++const skip=document.createElement('a');skip.className='salto12f';skip.href='#contenido12f';skip.textContent='Saltar al contenido principal';document.body.prepend(skip);
++const status=document.createElement('div');status.id='estado12f';status.role='status';status.setAttribute('aria-live','polite');status.className='sr12f';document.body.append(status);
++const main=document.createElement('span');main.id='contenido12f';main.tabIndex=-1;$('pApp').prepend(main);
++skip.onclick=e=>{e.preventDefault();(document.querySelector('.vista:not(.oculto) h2')||main).focus();};
++function announce(text){status.textContent=text;}
++let context=null,requestNumber=0;
++const card=document.createElement('section');card.id='fichaLectura12f';card.className='caja oculto';card.setAttribute('aria-label','Ficha de expediente de solo lectura');$('pApp').append(card);
++window.volverFicha12f=function(){++requestNumber;card.classList.add('oculto');if(!context)return;context.view?.classList.remove('oculto');context.focus?.focus();window.scrollTo(0,context.scroll);context=null;};
++window.verFichaLectura=async function(code){
++ if(!SESION||SESION.es_entidad){announce('Acceso no autorizado a esta ficha. Utilice Consulta.');return;}
++ const view=document.querySelector('.vista:not(.oculto)');
++ if(!context)context={view,focus:document.activeElement,scroll:window.scrollY};
++ document.querySelectorAll('.vista').forEach(v=>v.classList.add('oculto'));card.classList.remove('oculto');
++ card.innerHTML='<button class="btn2" onclick="volverFicha12f()">Volver al listado</button><h2 tabindex="-1">Ficha de expediente</h2><p role="status">Cargando ficha…</p>';card.setAttribute('aria-busy','true');card.querySelector('h2').focus();
++ const serial=++requestNumber;
++ try{
++  const f=await pedir('/unidades/'+encodeURIComponent(code));
++  // Both endpoints retain their own authentication/authorization. No synchronization GET.
++  const trace=await pedir('/unidades/'+encodeURIComponent(code)+'/trazabilidad');
++  if(serial!==requestNumber)return;
++  const entries=[['Estado',f.estado],['Título',f.titulo||f.nombre_expediente],['Período',f.periodo],['Subserie',f.subserie],['Caja de trabajo',f.caja_trabajo],['Caja definitiva',f.caja_definitiva],['Folios',f.folios]];
++  card.innerHTML='<button class="btn2" onclick="volverFicha12f()">Volver al listado</button><h2 tabindex="-1">'+esc(f.codigo_carpeta)+'</h2><p>Solo lectura. No permite editar, revisar, aprobar ni publicar.</p><dl>'+entries.map(([k,v])=>'<dt>'+esc(k)+'</dt><dd>'+esc(v??'Sin información')+'</dd>').join('')+'</dl>';
++  if(f.documento?.disponibles){const b=document.createElement('button');b.className='btn2';b.textContent='Consultar documento autorizado';b.onclick=()=>verDocumento(code);card.append(b);}
++  const description=document.createElement('section');const title=document.createElement('h3');title.textContent='Metadatos ISAD(G) — solo lectura';description.append(title);const metadata=document.createElement('dl');metadata.id='metadatos12f';for(const field of (f.isadg||[])){const term=document.createElement('dt');term.textContent=[field.numeral,field.etiqueta].filter(Boolean).join(' · ');const value=document.createElement('dd');value.textContent=field.valor===null||field.valor===undefined||field.valor===''?'Sin información':String(field.valor);metadata.append(term,value);}description.append(metadata);card.append(description);
++  const heading=document.createElement('h3');heading.textContent='Hoja de control';card.append(heading);
++  const control=document.createElement('p');control.textContent=(f.tramites||[]).map(t=>[t.no_item,t.fecha||'Sin fecha',t.tipo_documental,t.folio_desde+'–'+t.folio_hasta].join(' · ')).join('; ')||'Sin trámites registrados';card.append(control);
++  const h=document.createElement('h3');h.textContent='Trazabilidad';card.append(h);
++  const list=document.createElement('ul');for(const t of trace){const item=document.createElement('li');item.textContent=[t.fecha,t.accion,t.de,t.a,t.usuario,t.motivo].filter(Boolean).join(' · ');list.append(item);}card.append(list);
++  if(!trace.length){const p=document.createElement('p');p.textContent='Sin movimientos registrados';card.append(p);}
++  card.querySelector('h2').focus();announce('Ficha cargada en modo de solo lectura.');
++ }catch(e){if(serial!==requestNumber)return;const error=document.createElement('p');error.role='alert';error.textContent='No se pudo consultar la ficha: '+e.message;card.append(error);}
++ finally{if(serial===requestNumber)card.setAttribute('aria-busy','false');}
++};
++const originalView=mostrarVista;mostrarVista=function(v,b){++requestNumber;card.classList.add('oculto');context=null;originalView(v,b);document.querySelectorAll('nav button').forEach(x=>{if(x===b)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});const h=$(v.id)?.querySelector('h2,h1');if(h){h.tabIndex=-1;h.focus();}};
++const oldProcess=cargarProceso;cargarProceso=async function(...args){const panel=$('vCola');panel.setAttribute('aria-busy','true');announce('Actualizando proceso…');try{return await oldProcess(...args);}finally{panel.setAttribute('aria-busy','false');announce('Actualización de proceso finalizada.');}};
++for(const v of VISTAS){if(v.al===oldProcess)v.al=(...a)=>cargarProceso(...a);}
++let modalTrigger=null;
++function openedModal(){modalTrigger=document.activeElement;const m=$('modal');m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','Ayuda de la pantalla');$('pApp').inert=true;m.querySelector('button')?.focus();}
++const oldHelp=ayuda;ayuda=function(...a){oldHelp(...a);openedModal();};
++cerrarModal=function(){$('modal').classList.add('oculto');$('pApp').inert=false;modalTrigger?.focus();};
++$('modal').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();cerrarModal();}if(e.key==='Tab'){const items=[...$('modal').querySelectorAll('button,a[href],input,select,textarea,[tabindex="0"]')].filter(x=>!x.disabled&&x.getClientRects().length);if(!items.length)return;const first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
++const labels={buscarProceso:'Buscar carpeta en Proceso',buscarCodigo:'Código de carpeta',cuNombre:'Nombre de la cuenta',cuCorreo:'Correo de la cuenta',cuCargo:'Cargo de la cuenta',cuRol:'Rol de la cuenta',dsDesde:'Fecha inicial de descargas',dsHasta:'Fecha final de descargas',dsPersona:'Persona de las descargas'};
++for(const [id,name] of Object.entries(labels)){const e=$(id);if(!e)continue;let lab=e.parentElement.querySelector('label');if(lab&&!lab.htmlFor)lab.htmlFor=id;else e.setAttribute('aria-label',name);}
++for(const id of ['errIngreso','errCambio','resultadoBusqueda']){$(id)?.setAttribute('aria-live','assertive');$(id)?.setAttribute('aria-atomic','true');}
++for(const id of ['correo','clave'])$(id).setAttribute('aria-describedby','errIngreso');
++const oldEnter=entrar;entrar=async function(...a){for(const id of ['correo','clave'])$(id).removeAttribute('aria-invalid');await oldEnter(...a);if($('errIngreso').textContent){for(const id of ['correo','clave'])$(id).setAttribute('aria-invalid','true');($('correo').value?$('clave'):$('correo')).focus();}};
++$('btnIngresar').removeEventListener('click',oldEnter);$('btnIngresar').addEventListener('click',()=>entrar());
++function enhance(){
++ for(const t of document.querySelectorAll('table')){if(!t.caption){const c=t.createCaption();c.textContent=t.closest('.vista')?.querySelector('h2')?.textContent||'Datos del expediente';}for(const th of t.querySelectorAll('th')){if(!th.hasAttribute('scope'))th.scope=th.closest('thead')?'col':'row';if(!th.textContent.trim())th.textContent='Acciones';}}
++ for(const b of document.querySelectorAll('button[onclick]')){const handler=b.getAttribute('onclick')||'';if(/levantarHoja\(|generarIsadg\(/.test(handler)&&SESION&&!SESION.lectura_ia_disponible){b.disabled=true;b.title='No disponible: proveedores externos deshabilitados';b.setAttribute('aria-describedby','motivoIA12f');}}
++ const active=document.querySelector('nav button.act');if(active&&!active.hasAttribute('aria-current'))active.setAttribute('aria-current','page');
++}
++const reason=document.createElement('p');reason.id='motivoIA12f';reason.textContent='Lectura y revisión IA no disponibles: proveedores externos deshabilitados. El estado En cola no certifica ni invalida el procesamiento técnico PDF/A.';$('vCola').prepend(reason);
++let pending=false;new MutationObserver(()=>{if(pending)return;pending=true;queueMicrotask(()=>{pending=false;enhance();});}).observe(document.body,{subtree:true,childList:true});enhance();
++})();
+--- a/geology/rutas/cuentas.py
++++ b/geology/rutas/cuentas.py
+@@ -112,6 +112,7 @@
+     p = _a_usuario(u)
+     return {
+         "nombre": u.nombre, "correo": u.correo, "cargo": u.cargo,
++        "lectura_ia_disponible": any(bool(__import__("os").environ.get(k, "").strip()) for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", *[f"GEMINI_API_KEY_{i}" for i in range(1, 8)]]),
+         "rol": u.rol, "funcion": u.funcion, "activo": u.activo,
+         "sin_limites": bool(getattr(u, "sin_limites", False)),
+         "aprueba_lo_propio": bool(getattr(u, "aprueba_lo_propio", False)),

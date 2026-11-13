@@ -1,0 +1,190 @@
+{
+  "name": "${GEOLOGY_LOCAL_PROJECT:?local project required}",
+  "services": {
+    "almacen_datos": {
+      "image": "postgres:15",
+      "restart": "no",
+      "environment": {
+        "POSTGRES_USER": "${PG_USUARIO:?required}",
+        "POSTGRES_PASSWORD": "${PG_CLAVE:?required}",
+        "POSTGRES_DB": "${PG_BASE:?required}",
+        "POSTGRES_INITDB_ARGS": "--encoding=UTF8 --locale=C.UTF-8"
+      },
+      "volumes": [
+        "pgdata:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 20,
+        "start_period": "10s"
+      }
+    },
+    "mensajeria": {
+      "image": "redis:7-alpine",
+      "restart": "no",
+      "command": [
+        "redis-server",
+        "--appendonly",
+        "yes"
+      ],
+      "volumes": [
+        "redisdata:/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ],
+        "interval": "5s",
+        "timeout": "3s",
+        "retries": 20
+      }
+    },
+    "servidor": {
+      "profiles": [
+        "application"
+      ],
+      "build": {
+        "context": ".",
+        "dockerfile": "Dockerfile.document.local"
+      },
+      "image": "${GEOLOGY_LOCAL_PROJECT:?local project required}:2.13.0-9a",
+      "restart": "no",
+      "env_file": [
+        ".env"
+      ],
+      "environment": {
+        "DATABASE_URL": "postgresql+psycopg2://${PG_USUARIO:?required}:${PG_CLAVE:?required}@almacen_datos:5432/${PG_BASE:?required}",
+        "CELERY_BROKER_URL": "redis://mensajeria:6379/0",
+        "CELERY_RESULT_BACKEND": "redis://mensajeria:6379/1",
+        "PYTHONPATH": "/srv/geology"
+      },
+      "volumes": [
+        "./geology:/srv/geology/geology:ro",
+        "./scripts:/srv/geology/scripts:ro",
+        "./datos:/srv/geology/datos:ro",
+        "./deposito:/srv/geology/deposito",
+        "./expedidos:/srv/geology/expedidos"
+      ],
+      "depends_on": {
+        "almacen_datos": {
+          "condition": "service_healthy"
+        },
+        "mensajeria": {
+          "condition": "service_healthy"
+        }
+      },
+      "command": [
+        "uvicorn",
+        "geology.main:aplicacion",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080"
+      ],
+      "ports": [
+        "127.0.0.1:${PUERTO_WEB:?required}:8080"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8080/estado',timeout=4)); assert d['estado']=='operativo'"
+        ],
+        "interval": "10s",
+        "timeout": "6s",
+        "retries": 6,
+        "start_period": "15s"
+      },
+      "networks": [
+        "default",
+        "frontend"
+      ]
+    },
+    "procesador": {
+      "profiles": [
+        "application"
+      ],
+      "build": {
+        "context": ".",
+        "dockerfile": "Dockerfile.document.local"
+      },
+      "image": "${GEOLOGY_LOCAL_PROJECT:?local project required}:2.13.0-9a",
+      "restart": "no",
+      "env_file": [
+        ".env"
+      ],
+      "environment": {
+        "DATABASE_URL": "postgresql+psycopg2://${PG_USUARIO:?required}:${PG_CLAVE:?required}@almacen_datos:5432/${PG_BASE:?required}",
+        "CELERY_BROKER_URL": "redis://mensajeria:6379/0",
+        "CELERY_RESULT_BACKEND": "redis://mensajeria:6379/1",
+        "PYTHONPATH": "/srv/geology"
+      },
+      "volumes": [
+        "./geology:/srv/geology/geology:ro",
+        "./scripts:/srv/geology/scripts:ro",
+        "./datos:/srv/geology/datos:ro",
+        "./deposito:/srv/geology/deposito",
+        "./expedidos:/srv/geology/expedidos"
+      ],
+      "depends_on": {
+        "almacen_datos": {
+          "condition": "service_healthy"
+        },
+        "mensajeria": {
+          "condition": "service_healthy"
+        }
+      },
+      "command": [
+        "celery",
+        "-A",
+        "geology.nucleo.cola.celery_app",
+        "worker",
+        "--loglevel=info",
+        "--concurrency=${TRABAJADORES_EN_PARALELO:?required}",
+        "-Q",
+        "${GEOLOGY_COLA:?required}"
+      ]
+    }
+  },
+  "volumes": {
+    "pgdata": {
+      "name": "${GEOLOGY_LOCAL_PROJECT:?local project required}_pgdata"
+    },
+    "redisdata": {
+      "name": "${GEOLOGY_LOCAL_PROJECT:?local project required}_redisdata"
+    }
+  },
+  "networks": {
+    "default": {
+      "name": "${GEOLOGY_LOCAL_PROJECT:?local project required}_network",
+      "internal": true,
+      "ipam": {
+        "config": [
+          {
+            "subnet": "10.253.247.0/24"
+          }
+        ]
+      }
+    },
+    "frontend": {
+      "name": "${GEOLOGY_LOCAL_PROJECT:?local project required}_frontend",
+      "driver": "bridge",
+      "internal": false,
+      "ipam": {
+        "config": [
+          {
+            "subnet": "10.253.248.0/28"
+          }
+        ]
+      }
+    }
+  }
+}

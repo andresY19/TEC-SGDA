@@ -1,0 +1,9 @@
+# Plan de compatibilidad local para 14E
+
+1. Obtener aprobación de ventana y responsables de base, operación y recuperación. Identificar el proyecto original por etiquetas, redes, imágenes y volúmenes antes de cualquier intervención.
+2. Capturar respaldo fresco de PostgreSQL y del almacenamiento documental fuera de D:, con catálogo, manifiesto SHA-256 y una restauración de muestra aislada. Comparar esquema, cuentas, trazabilidad y referencias documentales con el estado actual.
+3. Revisar los GRANT de 14D contra la base restaurada, revisar funciones y privilegios heredados de PUBLIC y confirmar que solo el rol de administración posee el esquema. No ejecutar migraciones ni DDL implícito.
+4. Preparar Redis privado con ACL por función y AOF. Generar credenciales nuevas, aplicar la política de cierre general, rotar la llave de firma al cambiar de régimen y comprobar que el administrador puede volver a iniciar sesión.
+5. Probar los permisos de UID/GID 10001:10001 en una copia verificada de los volúmenes. Confirmar que hojas auxiliares sean legibles, que no haya montajes del código y que depósito y expedidos sean los únicos directorios documentales escribibles.
+6. Ensayar en copia de los datos, con IA deshabilitada y cola exclusiva. Exigir healthchecks, login, revocación, carga, división, ambos PDF/A, verificación independiente, conciliación, rollback y verificación de hashes. Cualquier denegación inesperada, referencia rota o tarea desconocida suspende el cambio.
+7. Si 14E autoriza una ventana real, registrar digests, congelar escrituras, verificar el respaldo y aplicar solo el procedimiento aprobado. Para revertir, detener entradas, preservar escrituras y diarios posteriores al corte, restaurar versiones y configuración compatibles y rotar la llave si se recupera Redis antiguo o código sin revocación. No restaurar a ciegas sobre datos posteriores.

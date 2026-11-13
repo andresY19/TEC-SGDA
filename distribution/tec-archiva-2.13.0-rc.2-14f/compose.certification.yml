@@ -1,0 +1,239 @@
+{
+  "name": "${CERT_PROJECT}",
+  "services": {
+    "pg": {
+      "image": "${PG_IMAGE}",
+      "pull_policy": "never",
+      "env_file": [
+        "${CERT_CONTROL}/pg-private.env"
+      ],
+      "volumes": [
+        "pgdata:/var/lib/postgresql/data"
+      ],
+      "networks": [
+        "backend"
+      ],
+      "cpus": 1,
+      "mem_limit": "768m",
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U cert_admin -d geology_cert10d"
+        ],
+        "interval": "2s",
+        "timeout": "3s",
+        "retries": 30
+      }
+    },
+    "redis": {
+      "image": "${REDIS_IMAGE}",
+      "pull_policy": "never",
+      "env_file": [
+        "${CERT_CONTROL}/redis-private.env"
+      ],
+      "volumes": [
+        "redisdata:/data",
+        "${CERT_CONTROL}/redis-private.conf:/cert-redis.conf:ro",
+        "${CERT_CONTROL}/redis-users.acl:/cert-users.acl:ro"
+      ],
+      "command": [
+        "redis-server",
+        "/cert-redis.conf"
+      ],
+      "networks": [
+        "backend"
+      ],
+      "cpus": 0.5,
+      "mem_limit": "256m",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "redis-cli",
+          "--user",
+          "probe",
+          "ping"
+        ],
+        "interval": "2s",
+        "timeout": "3s",
+        "retries": 30
+      }
+    },
+    "web": {
+      "image": "${WEB_IMAGE}",
+      "pull_policy": "never",
+      "user": "10001:10001",
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "env_file": [
+        "${CERT_CONTROL}/app-private.env"
+      ],
+      "working_dir": "/srv/geology",
+      "networks": [
+        "backend"
+      ],
+      "cpus": 2,
+      "mem_limit": "3g",
+      "tmpfs": [
+        "/tmp:uid=10001,gid=10001,mode=1770",
+        "/home/geology:uid=10001,gid=10001,mode=0700"
+      ],
+      "volumes": [
+        "documents:/cert",
+        "deposito:/srv/geology/deposito",
+        "expedidos:/srv/geology/expedidos",
+        "datos:/srv/geology/datos:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/estado',timeout=3)"
+        ],
+        "interval": "3s",
+        "timeout": "5s",
+        "retries": 30
+      }
+    },
+    "worker": {
+      "image": "${WORKER_IMAGE}",
+      "pull_policy": "never",
+      "user": "10001:10001",
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "env_file": [
+        "${CERT_CONTROL}/app-private.env"
+      ],
+      "working_dir": "/srv/geology",
+      "networks": [
+        "backend"
+      ],
+      "cpus": 2,
+      "mem_limit": "3g",
+      "tmpfs": [
+        "/tmp:uid=10001,gid=10001,mode=1770",
+        "/home/geology:uid=10001,gid=10001,mode=0700"
+      ],
+      "volumes": [
+        "documents:/cert",
+        "deposito:/srv/geology/deposito",
+        "expedidos:/srv/geology/expedidos",
+        "datos:/srv/geology/datos:ro"
+      ]
+    },
+    "runner": {
+      "image": "${CERT_IMAGE}",
+      "pull_policy": "never",
+      "user": "10001:10001",
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "env_file": [
+        "${CERT_CONTROL}/runner-private.env"
+      ],
+      "working_dir": "/srv/geology",
+      "networks": [
+        "backend"
+      ],
+      "cpus": 2,
+      "mem_limit": "3g",
+      "tmpfs": [
+        "/tmp:uid=10001,gid=10001,mode=1770",
+        "/home/geology:uid=10001,gid=10001,mode=0700"
+      ],
+      "volumes": [
+        "documents:/cert",
+        "deposito:/srv/geology/deposito",
+        "expedidos:/srv/geology/expedidos",
+        "datos:/srv/geology/datos",
+        "regression:/work",
+        "${CERT_CONTROL}/private.json:/run/secrets/cert-private.json:ro"
+      ]
+    },
+    "faultworker": {
+      "image": "${CERT_IMAGE}",
+      "pull_policy": "never",
+      "user": "10001:10001",
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "env_file": [
+        "${CERT_CONTROL}/app-private.env"
+      ],
+      "working_dir": "/srv/geology",
+      "networks": [
+        "backend"
+      ],
+      "cpus": 2,
+      "mem_limit": "3g",
+      "tmpfs": [
+        "/tmp:uid=10001,gid=10001,mode=1770",
+        "/home/geology:uid=10001,gid=10001,mode=0700"
+      ],
+      "volumes": [
+        "documents:/cert",
+        "deposito:/srv/geology/deposito",
+        "expedidos:/srv/geology/expedidos",
+        "datos:/srv/geology/datos:ro"
+      ],
+      "command": [
+        "python",
+        "-B",
+        "/opt/geology-cert/worker.py"
+      ],
+      "environment": {
+        "VERAPDF_BIN": "/opt/geology-cert/bin/verapdf",
+        "PATH": "/opt/geology-cert/bin:/opt/geology-ghostscript/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      }
+    }
+  },
+  "networks": {
+    "backend": {
+      "internal": true,
+      "ipam": {
+        "config": [
+          {
+            "subnet": "${BACKEND_SUBNET}"
+          }
+        ]
+      }
+    },
+    "frontend": {
+      "internal": true,
+      "ipam": {
+        "config": [
+          {
+            "subnet": "${FRONTEND_SUBNET}"
+          }
+        ]
+      }
+    }
+  },
+  "volumes": {
+    "pgdata": {},
+    "redisdata": {},
+    "documents": {},
+    "deposito": {},
+    "expedidos": {},
+    "regression": {},
+    "datos": {}
+  }
+}

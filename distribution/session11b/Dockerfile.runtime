@@ -1,0 +1,10 @@
+ARG TOOLCHAIN_IMAGE
+FROM ${TOOLCHAIN_IMAGE}
+USER 0:0
+COPY --chown=0:0 geology/ /srv/geology/geology/
+COPY --chown=0:0 build-manifest.json /opt/geology-distribution/build-manifest.json
+RUN find /srv/geology/geology -type d -exec chmod 0755 {} + \
+ && find /srv/geology/geology -type f -exec chmod 0644 {} + \
+ && chmod 0644 /opt/geology-distribution/build-manifest.json \
+ && python -m pip check
+USER 10001:10001

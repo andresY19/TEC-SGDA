@@ -1,0 +1,4 @@
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+USER 10001:10001
+CMD ["uvicorn", "geology.main:aplicacion", "--host", "0.0.0.0", "--port", "8080"]

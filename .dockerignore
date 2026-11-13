@@ -1,0 +1,13 @@
+**
+!Dockerfile
+!Dockerfile.local
+!requirements.txt
+!requirements.local.txt
+!scripts/
+!scripts/verapdf-auto.xml
+!geology/
+!geology/**
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*

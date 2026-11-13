@@ -1,0 +1,11 @@
+--- a/geology/interfaz/accesibilidad12f.js
++++ b/geology/interfaz/accesibilidad12f.js
+@@ -55,6 +55,8 @@
+  for(const b of document.querySelectorAll('button[onclick]')){const handler=b.getAttribute('onclick')||'';if(/levantarHoja\(|generarIsadg\(/.test(handler)&&SESION&&!SESION.lectura_ia_disponible){b.disabled=true;b.title='No disponible: proveedores externos deshabilitados';b.setAttribute('aria-describedby','motivoIA12f');}}
+  const active=document.querySelector('nav button.act');if(active&&!active.hasAttribute('aria-current'))active.setAttribute('aria-current','page');
+ }
++// 12H: WCAG 2.5.8 targets in Cuentas only; no event, value or permission changes.
++const targets12h=document.createElement('style');targets12h.textContent=`#vCuentas input[type=checkbox]{box-sizing:border-box;width:24px;height:24px;min-width:24px;min-height:24px;vertical-align:middle;margin:6px}`;document.head.append(targets12h);
+ const reason=document.createElement('p');reason.id='motivoIA12f';reason.textContent='Lectura y revisión IA no disponibles: proveedores externos deshabilitados. El estado En cola no certifica ni invalida el procesamiento técnico PDF/A.';$('vCola').prepend(reason);
+ let pending=false;new MutationObserver(()=>{if(pending)return;pending=true;queueMicrotask(()=>{pending=false;enhance();});}).observe(document.body,{subtree:true,childList:true});enhance();
+ })();

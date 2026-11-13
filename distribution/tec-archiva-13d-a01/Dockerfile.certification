@@ -1,0 +1,12 @@
+# The test adapter and tests are excluded from the runtime FastAPI/Celery images.
+ARG WORKER_IMAGE
+FROM ${WORKER_IMAGE}
+USER 0:0
+COPY --chown=0:0 tests/ /srv/geology/tests/
+COPY --chown=0:0 cert/ /opt/geology-cert/
+RUN install -d -o 10001 -g 10001 -m 0770 /work \
+ && find /srv/geology/tests /opt/geology-cert -type d -exec chmod 0755 {} + \
+ && find /srv/geology/tests /opt/geology-cert -type f -exec chmod 0644 {} + \
+ && chmod 0755 /opt/geology-cert/bin/ocrmypdf /opt/geology-cert/bin/verapdf
+USER 10001:10001
+CMD ["python", "-B", "-c", "import time; time.sleep(86400)"]

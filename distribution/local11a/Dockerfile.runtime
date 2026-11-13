@@ -1,0 +1,26 @@
+# Local toolchain tag must resolve to the configuration digest in build-manifest.json.
+# No package downloads: installed Python/Debian versions are locked and verified.
+ARG TOOLCHAIN_IMAGE
+FROM ${TOOLCHAIN_IMAGE}
+USER 0:0
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/home/geology TMPDIR=/tmp PYTHONPATH=/srv/geology
+WORKDIR /srv/geology
+# This removes stale application files only inside a NEW image layer.
+RUN rm -rf /srv/geology/geology /root/.cache \
+ && groupadd --gid 10001 geologyapp \
+ && useradd --uid 10001 --gid 10001 --home-dir /home/geology --no-create-home --shell /usr/sbin/nologin geologyapp \
+ && install -d -o 10001 -g 10001 -m 0770 /cert /srv/geology/deposito /srv/geology/expedidos \
+ && install -d -o 10001 -g 10001 -m 0700 /home/geology
+COPY --chown=0:0 geology/ /srv/geology/geology/
+COPY --chown=0:0 build-manifest.json requirements.autonomous.lock /opt/geology-distribution/
+COPY --chown=0:0 run_worker.py /opt/geology-distribution/run_worker.py
+RUN find /srv/geology/geology -type d -exec chmod 0755 {} + \
+ && find /srv/geology/geology -type f -exec chmod 0644 {} + \
+ && find /opt/geology-distribution -type d -exec chmod 0755 {} + \
+ && find /opt/geology-distribution -type f -exec chmod 0644 {} + \
+ && python -m pip check \
+ && python -c "import json,importlib.metadata as m,pathlib,hashlib;d=json.load(open('/opt/geology-distribution/build-manifest.json'));assert all(m.version(k)==v for k,v in d['python_packages'].items());assert all(hashlib.sha256(pathlib.Path('/srv/geology',k).read_bytes()).hexdigest()==v for k,v in d['source_sha256'].items())" \
+ && test ! -e /srv/geology/.env \
+ && test ! -e /srv/geology/geology/.env
+USER 10001:10001
+EXPOSE 8080

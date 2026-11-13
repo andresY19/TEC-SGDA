@@ -1,0 +1,6 @@
+# Dependencias adicionales verificadas para calidad_imagen.py; solo imagen local.
+numpy==2.4.6
+opencv-python-headless==5.0.0.93
+
+# Celery 5.4 / redis-py 5.2.1: transporte compatible local verificado.
+kombu==5.4.2

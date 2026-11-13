@@ -1,0 +1,121 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>GEOLOGY 12E — Revisión UX</title><style>body{font:16px/1.55 Arial;margin:40px;max-width:1250px;color:#202734}table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid #bbc4ce;padding:9px;text-align:left;vertical-align:top}th{background:#e9eef5}h1,h2{color:#183c62}img{max-width:100%;border:1px solid #aaa}article{border-top:2px solid #c8d5e3;margin-top:24px;padding-top:12px}.note{background:#edf3fa;padding:18px}</style><h1>GEOLOGY — Fase 12E</h1><p>Revisión de navegación, claridad y accesibilidad básica · 8 de noviembre de 2026 · Ejecución técnica: Codex.</p>
+<p class="note">Resultado PARTIAL: recorrido UX realizado en cuatro perfiles con datos sintéticos y tráfico de interfaz interceptado. Se identificaron 12 hallazgos, cinco específicamente de navegación (UX01, UX02, UX04, UX05, UX12) y uno crítico funcional (UX01). No equivale a aceptación institucional, certificación WCAG completa ni nueva certificación de autenticación.</p>
+<h2>Preflight y protección</h2><p>Distribución 11E e integridad de demostración 12D verificadas. Entorno exclusivo geology-auto11e-uat12c-487daa8d, cuatro servicios operativos al inicio, IA y lectura automática deshabilitadas, conexiones configuradas locales. El proyecto original no fue intervenido. Evidencias: preflight.json e integridad_final.json.</p>
+<h2>Método y límites</h2><p>HTML real obtenido de /app; respuestas de consulta tomadas de manejadores existentes mediante ASGI en proceso temporal con transacciones PostgreSQL de solo lectura e identidad sintética sustituida. Navegador Playwright con todas las peticiones interceptadas: login simulado con pase no operativo; ninguna petición de escritura llega al servidor. No se consultó el GET de apoyos que sincroniza datos. No hubo cargas, conciliaciones, tareas, cambios de sesiones ni reinicios. Los errores 503 y retardos son simulados deliberadamente. Las capturas muestran la interfaz real sobre respuestas sintéticas de lectura; no prueban login real.</p>
+<p>Se comprobaron teclado, DOM, estilos calculados y menús. No se ejecutaron lectores de pantalla, auditoría exhaustiva de contraste, todos los estados deshabilitados, zoom 200/400%, ni flujo de escritura. Accesibilidad: PARTIAL. En viewport 390px no se detectó desbordamiento de página en Cargue; el menú sí desplaza horizontalmente. No se registraron excepciones JavaScript en el recorrido, lo que no demuestra ausencia global de errores.</p>
+<h2>Diez pasos de demostración</h2><table><tr><th>Paso</th><th>Perfil</th><th>Comprobación actual</th><th>Límite</th></tr>
+<tr><td>01 Ingreso</td><td>Cuatro perfiles</td><td>Pantalla y validación vacía; ingreso interceptado</td><td>Autenticación real no repetida: genera escrituras.</td></tr>
+<tr><td>02 Administración y permisos</td><td>Administración; resto restringido</td><td>Menús de cuatro perfiles y GET con identidad sintética</td><td>No crear/desactivar cuentas ni revocar sesiones.</td></tr>
+<tr><td>03 Inventario</td><td>Según permisos existentes</td><td>Consultas GET y datos sintéticos capturados</td><td>No importar ni persistir inventarios.</td></tr>
+<tr><td>04 Cargue</td><td>Administración, Equipo, Líder</td><td>Formulario, controles, ayuda y adaptación a 390px</td><td>No seleccionar/subir documentos.</td></tr>
+<tr><td>05 División</td><td>Administración, Equipo, Líder</td><td>Partes existentes y expansión de fila</td><td>No generar partes nuevas.</td></tr>
+<tr><td>06 Procesamiento</td><td>Administración, Equipo, Líder</td><td>Resumen, acciones y actualización retardada</td><td>No publicar tareas; no IA.</td></tr>
+<tr><td>07 Consulta expediente</td><td>Cuatro perfiles</td><td>Búsqueda y enlace a ficha; defecto UX01</td><td>Consulta carece de acceso visual completo.</td></tr>
+<tr><td>08 Trazabilidad</td><td>Cuatro perfiles según lectura</td><td>GET y visualización en Revisión para tres perfiles</td><td>No insertar trazas; UX01 afecta Consulta.</td></tr>
+<tr><td>09 Conciliación</td><td>Operador técnico autorizado</td><td>Documentación 12D y evidencia existente</td><td>No ejecutar conciliación ni generar recibos; no se certifica interfaz nueva.</td></tr>
+<tr><td>10 Restricciones</td><td>Cuatro perfiles</td><td>Coherencia del menú y respuestas GET capturadas</td><td>Permisos de escritura históricos 12C/12D, no reejecutados.</td></tr>
+</table><h2>Expedientes En cola y propuesta de navegación</h2><p>Se localizan en Proceso → Por leer, o mediante Localización → Buscar por código. En la fila observada están Levantar con el modelo y Ver PDF. No existe enlace directo visible a ficha o revisión. La búsqueda ofrece Ver la ficha completa, pero verFicha dibuja dentro de #fichaRevision sin activar esa vista. Administración, Equipo y Líder pueden abrir Revisión manualmente; Consulta no tiene esa pestaña. El GET de lectura está autorizado en la captura de Consulta: el bloqueo demostrado es de navegación, no una autorización de escritura.</p><p>No se verificó una URL profunda existente que abra la ficha con seguridad; los endpoints GET son recursos de API y no sustituyen una pantalla navegable. Propuesta posterior: ficha de lectura compartida, abierta desde Proceso y Localización, con volver al listado y filtro preservado; acciones de revisión separadas y protegidas por RBAC. Una futura URL de ficha requerirá diseño y pruebas; no se presenta como disponible hoy.</p><h2>Matriz priorizada</h2>
+<article><h3>UX01 · P0 · Localización / ficha</h3>
+<p><strong>Perfil:</strong> Todos; bloqueo para Consulta</p>
+<p><strong>Descripcion:</strong> Ver la ficha completa escribe en #fichaRevision sin activar la vista. Consulta no tiene pestaña Revisión.</p>
+<p><strong>Evidencia:</strong> Buscar AC-CP-99971, pulsar Ver la ficha completa; no aparece Trazabilidad. En otros perfiles aparece al abrir Revisión. GET de ficha autorizado en captura de Consulta.</p>
+<p><strong>Impacto:</strong> Bloquea la consulta integral y trazabilidad por interfaz.</p>
+<p><strong>Solucion propuesta:</strong> Ficha de solo lectura compartida, separada de acciones de revisión y accesible según RBAC.</p>
+<p><strong>Criterio aceptacion:</strong> Los cuatro perfiles autorizados abren ficha visible desde búsqueda; Consulta no obtiene acciones de escritura.</p>
+</article>
+<article><h3>UX02 · P1 · Proceso / En cola</h3>
+<p><strong>Perfil:</strong> Administración, Equipo, Líder</p>
+<p><strong>Descripcion:</strong> No hay enlace directo a ficha, Localización o Revisión en la fila En cola.</p>
+<p><strong>Evidencia:</strong> queueActions: Levantar con el modelo y Ver; captura administradora-Proceso.png.</p>
+<p><strong>Impacto:</strong> Recorrido indirecto y difícil de descubrir.</p>
+<p><strong>Solucion propuesta:</strong> Añadir Ver ficha y acceso contextual a Localización; Revisión solo si procede y está autorizado.</p>
+<p><strong>Criterio aceptacion:</strong> Desde En cola se llega a ficha en una acción; regresar conserva filtro y foco.</p>
+</article>
+<article><h3>UX03 · P1 · Proceso / IA deshabilitada</h3>
+<p><strong>Perfil:</strong> Administración, Equipo, Líder</p>
+<p><strong>Descripcion:</strong> Levantar con el modelo permanece habilitado aunque IA y lectura automática están deshabilitadas.</p>
+<p><strong>Evidencia:</strong> Botón visible y enabled en DOM; no se pulsó ni se probó una llamada IA.</p>
+<p><strong>Impacto:</strong> Acción ofrecida sin capacidad operativa; posible confusión y error.</p>
+<p><strong>Solucion propuesta:</strong> Ocultar o deshabilitar con explicación accesible de indisponibilidad.</p>
+<p><strong>Criterio aceptacion:</strong> Con IA deshabilitada ninguna acción ofrece iniciar lectura externa; motivo accesible y sin envío de tareas.</p>
+</article>
+<article><h3>UX04 · P2 · Proceso / estados</h3>
+<p><strong>Perfil:</strong> Administración, Equipo, Líder</p>
+<p><strong>Descripcion:</strong> Por leer / esperan al modelo no distingue progreso técnico de lectura IA.</p>
+<p><strong>Evidencia:</strong> Resumen y fila En cola observados; documentos técnicos previos en evidencias 12D.</p>
+<p><strong>Impacto:</strong> Usuario puede interpretar En cola como fallo del procesamiento técnico.</p>
+<p><strong>Solucion propuesta:</strong> Separar indicadores informativos de recepción, división, PDF/A y lectura, sin cambiar estados archivísticos.</p>
+<p><strong>Criterio aceptacion:</strong> Se distingue estado técnico de espera IA y revisión humana; ningún indicador implica aprobación.</p>
+</article>
+<article><h3>UX05 · P1 · Proceso / partes</h3>
+<p><strong>Perfil:</strong> Administración, Equipo, Líder</p>
+<p><strong>Descripcion:</strong> Expansión de partes vinculada a onclick de una fila sin semántica de control ni foco de teclado.</p>
+<p><strong>Evidencia:</strong> partsControl en observaciones_ui.json; tr.carpeta, tabindex ausente, nativeTabIndex -1, onclick true.</p>
+<p><strong>Impacto:</strong> El control de expansión no es alcanzable mediante Tab.</p>
+<p><strong>Solucion propuesta:</strong> Botón Expandir partes con aria-expanded y relación con contenido.</p>
+<p><strong>Criterio aceptacion:</strong> Tab alcanza el botón; Enter y Espacio expanden/contraen; se anuncia estado y conserva orden.</p>
+</article>
+<article><h3>UX06 · P1 · Ayuda Qué hacer</h3>
+<p><strong>Perfil:</strong> Todos los perfiles con ayuda</p>
+<p><strong>Descripcion:</strong> Modal no mueve ni retiene foco, sin role dialog/aria-modal; Escape no cierra.</p>
+<p><strong>Evidencia:</strong> 02_modal_teclado.png; helpModal: cinco Tab fuera del modal y Escape sin cierre.</p>
+<p><strong>Impacto:</strong> El teclado opera controles del fondo mientras la ayuda está abierta.</p>
+<p><strong>Solucion propuesta:</strong> Diálogo accesible con nombre, foco inicial, ciclo de foco, Escape y retorno al disparador.</p>
+<p><strong>Criterio aceptacion:</strong> Abrir por teclado, recorrer controles, cerrar por Escape y recuperar foco sin interactuar con fondo.</p>
+</article>
+<article><h3>UX07 · P1 · Búsquedas y Cuentas</h3>
+<p><strong>Perfil:</strong> Todos en búsquedas; Administración en Cuentas</p>
+<p><strong>Descripcion:</strong> Controles visibles sin etiqueta programáticamente asociada.</p>
+<p><strong>Evidencia:</strong> IDs buscarProceso, buscarCodigo, cuNombre, cuCorreo, cuCargo, cuRol, dsDesde, dsHasta, dsPersona; matriz DOM.</p>
+<p><strong>Impacto:</strong> Propósito del campo menos claro para tecnología asistiva.</p>
+<p><strong>Solucion propuesta:</strong> Asociar label/for o nombre accesible; mantener instrucciones y ejemplos.</p>
+<p><strong>Criterio aceptacion:</strong> Cada control visible tiene nombre accesible inequívoco; no depende exclusivamente de placeholder.</p>
+</article>
+<article><h3>UX08 · P1 · Ingreso / errores de consulta</h3>
+<p><strong>Perfil:</strong> Todos</p>
+<p><strong>Descripcion:</strong> Errores visibles sin anuncio accesible; ingreso sin asociación del error con campos.</p>
+<p><strong>Evidencia:</strong> emptyError y serverError: role/live ausentes, aria-invalid/describedBy ausentes. 503 inyectado, no fallo real del servicio.</p>
+<p><strong>Impacto:</strong> Usuarios pueden no percibir el error ni cómo corregirlo.</p>
+<p><strong>Solucion propuesta:</strong> Resumen anunciado y asociación con campos; foco gestionado sin perder datos.</p>
+<p><strong>Criterio aceptacion:</strong> Error de credenciales/formulario y 503 sintético se anuncian una vez; campo erróneo queda identificado.</p>
+</article>
+<article><h3>UX09 · P1 · Ingreso / textos secundarios</h3>
+<p><strong>Perfil:</strong> Todos</p>
+<p><strong>Descripcion:</strong> Contraste calculado 3,95:1 en .descr y .pie de 12px/11px sobre blanco.</p>
+<p><strong>Evidencia:</strong> lowContrastSamples; ocho muestras repetidas equivalen a dos estilos, no ocho defectos.</p>
+<p><strong>Impacto:</strong> Legibilidad reducida de texto pequeño.</p>
+<p><strong>Solucion propuesta:</strong> Ajustar color conservando identidad visual.</p>
+<p><strong>Criterio aceptacion:</strong> Texto normal alcanza al menos 4,5:1; repetir medición en estados y fondos efectivos.</p>
+</article>
+<article><h3>UX10 · P2 · Proceso / actualización</h3>
+<p><strong>Perfil:</strong> Administración, Equipo, Líder</p>
+<p><strong>Descripcion:</strong> Durante retardo sintético se mantiene resumen anterior sin aria-busy ni región de estado.</p>
+<p><strong>Evidencia:</strong> loading: demora 1500ms, busy null, live 0.</p>
+<p><strong>Impacto:</strong> No se distingue actualización en curso de información vigente.</p>
+<p><strong>Solucion propuesta:</strong> Indicador de actualización y anuncio al terminar/fallar.</p>
+<p><strong>Criterio aceptacion:</strong> Con red lenta se identifica carga sin borrar contexto; final o error se anuncia sin duplicaciones.</p>
+</article>
+<article><h3>UX11 · P2 · Tablas</h3>
+<p><strong>Perfil:</strong> Perfiles con tablas</p>
+<p><strong>Descripcion:</strong> Faltan caption y scope explícitos; algunas cabeceras de acciones vacías.</p>
+<p><strong>Evidencia:</strong> tables en capturas DOM; existen th, por lo que no se afirma fallo universal de asociación.</p>
+<p><strong>Impacto:</strong> Riesgo de orientación con lector de pantalla; requiere validación asistiva.</p>
+<p><strong>Solucion propuesta:</strong> Nombre contextual de tabla y encabezados claros; scope donde corresponda.</p>
+<p><strong>Criterio aceptacion:</strong> Lector de pantalla identifica tabla, fila/columna y acción contextual; confirmar en prueba manual.</p>
+</article>
+<article><h3>UX12 · P2 · Menú y navegación</h3>
+<p><strong>Perfil:</strong> Todos</p>
+<p><strong>Descripcion:</strong> Vista activa marcada visualmente sin aria-current/selected; menú horizontal extenso.</p>
+<p><strong>Evidencia:</strong> nav en DOM; administrador 15 opciones, Consulta 4; desplazamiento horizontal del menú.</p>
+<p><strong>Impacto:</strong> Orientación y descubrimiento de secciones reducidos.</p>
+<p><strong>Solucion propuesta:</strong> Semántica de ubicación actual, agrupación por tareas y acceso rápido a contenido principal.</p>
+<p><strong>Criterio aceptacion:</strong> Teclado identifica vista actual y llega al contenido sin recorrer todo el menú; permisos se conservan.</p>
+</article>
+<h2>Accesibilidad: interpretación</h2><p>UX06–UX12 requieren corrección o validación específica. El contraste mínimo para texto normal se compara con 4,5:1 según <a href="https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html">WCAG 2.2, contraste mínimo</a>. La gestión de foco y Escape se contrasta con la guía <a href="https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/">WAI-ARIA para diálogos modales</a>. Para actualización y errores, consultar <a href="https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html">mensajes de estado</a>. La falta de caption/scope por sí sola no demuestra incumplimiento de todas las tablas; se conserva como riesgo a comprobar. Los botones nativos de selección de archivos son alcanzables: no se reporta fallo de teclado por ocultar el input de archivo.</p><h2>Plan posterior, sin ejecutar</h2><ol><li>Resolver UX01–UX02: ficha compartida, navegación y pruebas por los cuatro perfiles sin ampliar permisos.</li><li>Corregir UX03 y UX05–UX09: disponibilidad de acciones, teclado, etiquetas, errores y contraste.</li><li>Mejorar UX04 y UX10–UX12: estados técnicos informativos, carga, tablas y menú.</li><li>Verificar teclado y lector de pantalla con usuarios de prueba; probar zoom y móvil en todas las pantallas. Repetir U01/U02/U03/U04/U09/U14 en instalación aislada si se autoriza escritura sintética.</li><li>Documentar resultados y solicitar validación de responsables institucionales; no cambiar clasificaciones, estados archivísticos ni políticas por una mejora visual.</li></ol><p>Prioridad P0 significa bloqueo de tarea principal para un perfil, no fuga de datos ni pérdida documental. P1: barrera importante; P2: claridad o verificación adicional. No se detectó una necesidad de migración para las propuestas; la implementación deberá confirmarlo.</p><h2>Evidencias y recuperación</h2><p>observaciones_ui.json contiene las observaciones por perfil y solicitudes interceptadas; integridad_final.json registra huellas lógicas de la base y hashes de fuentes. SHA256SUMS.json protege este paquete. Los archivos de revisión son nuevos; no hay modificaciones del código, esquema, documentos activos ni imágenes certificadas. No se necesita restauración ni reversión de datos porque no se ejecutaron escrituras funcionales. Conservar paquete para comparación y no eliminarlo automáticamente.</p><h2>Capturas seleccionadas</h2>
+<h3>consulta-Localizacion.png</h3><img alt="Captura de revisión con sesión interceptada y datos sintéticos: consulta-Localizacion.png" src="consulta-Localizacion.png">
+<h3>administradora-Proceso.png</h3><img alt="Captura de revisión con sesión interceptada y datos sintéticos: administradora-Proceso.png" src="administradora-Proceso.png">
+<h3>administradora-partes.png</h3><img alt="Captura de revisión con sesión interceptada y datos sintéticos: administradora-partes.png" src="administradora-partes.png">
+<h3>02_modal_teclado.png</h3><img alt="Captura de revisión con sesión interceptada y datos sintéticos: 02_modal_teclado.png" src="02_modal_teclado.png">
+<h3>01_error_ingreso.png</h3><img alt="Captura de revisión con sesión interceptada y datos sintéticos: 01_error_ingreso.png" src="01_error_ingreso.png">
+<h3>04_cargue_movil.png</h3><img alt="Captura de revisión con sesión interceptada y datos sintéticos: 04_cargue_movil.png" src="04_cargue_movil.png">
+</html>

@@ -1,0 +1,19 @@
+# Variante local: Ghostscript oficial verificado; no modifica la imagen 8B.
+FROM geology-local-20261106-57a99a:2.13.0-8b AS gsbuild
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /tmp/gs-build
+RUN curl --fail --location --retry 3 \
+      https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10080/ghostscript-10.08.0.tar.gz -o source.tgz \
+    && echo "caf199e3f233f1290b27d0972d636f66c303355f2353309b7bfddf1edda06b3d  source.tgz" | sha256sum -c - \
+    && tar xzf source.tgz --strip-components=1 \
+    && ./configure --prefix=/opt/geology-ghostscript --without-x --disable-cups \
+    && make -j2 && make install
+
+FROM geology-local-20261106-57a99a:2.13.0-8b
+COPY --from=gsbuild /opt/geology-ghostscript /opt/geology-ghostscript
+ENV PATH="/opt/geology-ghostscript/bin:${PATH}"
+# OCRmyPDF 16.10.4 calls Pdf.check(), removed by pikepdf 10.
+# Local compatibility pin only; original requirements remain unchanged.
+RUN pip install --no-cache-dir pikepdf==9.11.0 \
+ && gs --version && pip check

@@ -1,0 +1,8 @@
+FROM tec-archiva-14f-certification:rc2-a03
+COPY --chown=10001:10001 reconcile_documents.py /srv/geology/reconcile_documents.py
+COPY --chown=10001:10001 geology/nucleo/autorizacion_conciliacion.py /srv/geology/geology/nucleo/autorizacion_conciliacion.py
+COPY --chown=10001:10001 geology/nucleo/identidad_conciliacion.py /srv/geology/geology/nucleo/identidad_conciliacion.py
+COPY --chown=10001:10001 reconcile_documents.py /opt/geology-distribution/reconcile_documents.py
+COPY --chown=10001:10001 tests/test_cli_context_14f.py /srv/geology/tests/test_cli_context_14f.py
+COPY --chown=10001:10001 tests/test_authorization_14h.py /srv/geology/tests/test_authorization_14h.py
+COPY --chown=10001:10001 cert/reconciliation_11d_tests.py /opt/geology-cert/reconciliation_11d_tests.py
