@@ -248,13 +248,23 @@ class SesionesSeguras(unittest.TestCase):
     def test_29_todas_rutas_protegidas_usan_dependencia(self):
         sin_control=[]; total=0
         for p in (ROOT/'geology/rutas').glob('*.py'):
-            for fn in ast.parse(p.read_text(encoding='utf-8-sig')).body:
+            tree = ast.parse(p.read_text(encoding='utf-8-sig'))
+            guards = {'usuario_actual'}
+            if p.name == 'offline_sync.py':
+                offline_guard = next(fn for fn in tree.body
+                                     if isinstance(fn, ast.FunctionDef) and fn.name == 'authorized')
+                self.assertTrue(any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                                    and n.func.id == 'Depends' and n.args
+                                    and isinstance(n.args[0], ast.Name) and n.args[0].id == 'usuario_actual'
+                                    for n in ast.walk(offline_guard.args)))
+                guards.add('authorized')
+            for fn in tree.body:
                 if not isinstance(fn,(ast.FunctionDef,ast.AsyncFunctionDef)): continue
                 if not any(isinstance(d,ast.Call) and isinstance(d.func,ast.Attribute) and isinstance(d.func.value,ast.Name)
                            and d.func.value.id=='router' for d in fn.decorator_list): continue
                 total+=1
                 if not any(isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='Depends'
-                    and n.args and isinstance(n.args[0],ast.Name) and n.args[0].id=='usuario_actual' for n in ast.walk(fn.args)):
+                    and n.args and isinstance(n.args[0],ast.Name) and n.args[0].id in guards for n in ast.walk(fn.args)):
                     sin_control.append((p.name,fn.name))
         self.assertGreater(total,100)
         self.assertEqual(sin_control,[('cuentas.py','ingresar')])

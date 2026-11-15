@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TEC-ARCHIVA | Gestión documental inteligente</title>
+<title>TEC-SGDEA | Gestión documental inteligente</title>
 <style>
 :root{
   --tinta:#2F2A26; --tinta2:#4A403A; --teal:#2F6B52; --ocre:#B8742A;
@@ -192,7 +192,7 @@ tr.malaFila input{border-color:var(--carmin);background:#FFF7F9}
 #panelAlertas .al:last-child{border-bottom:0}
 .avisoSim{border-left:4px solid var(--carmin);margin:10px 0}
 </style>
-<link rel="stylesheet" href="/recursos/tec-archiva.css">
+<link rel="stylesheet" href="/recursos/tec-archiva.css?v=sidebar-a01">
 </head>
 <body>
 
@@ -200,7 +200,7 @@ tr.malaFila input{border-color:var(--carmin);background:#FFF7F9}
 <section id="pIngreso">
   <div class="ta-login">
     <div class="ta-login-brand">
-      <div class="ta-wordmark"><span class="ta-mark" aria-hidden="true">TA</span><div>TEC-ARCHIVA<small>Gestión documental inteligente</small></div></div>
+      <div class="ta-wordmark"><span class="ta-mark" aria-hidden="true">TS</span><div>TEC-SGDEA<small>Gestión documental inteligente</small></div></div>
       <div class="ta-login-message"><p class="ta-eyebrow">PLATAFORMA INSTITUCIONAL</p>
         <h1>Gestión documental,<br>bajo tu control.</h1>
         <p>Organiza, conserva y consulta tus expedientes desde una plataforma segura.</p>
@@ -242,14 +242,14 @@ tr.malaFila input{border-color:var(--carmin);background:#FFF7F9}
 <!-- ================= APLICACIÓN ================= -->
 <div id="pApp" class="oculto">
 <aside class="ta-sidebar" id="taSidebar">
-  <div class="ta-wordmark"><span class="ta-mark" aria-hidden="true">TA</span><div>TEC-ARCHIVA<small>Gestión documental inteligente</small></div></div>
+  <div class="ta-wordmark"><span class="ta-mark" aria-hidden="true">TS</span><div>TEC-SGDEA<small>Gestión documental inteligente</small></div></div>
   <nav id="menu" aria-label="Navegación principal"></nav>
   <p class="ta-sidebar-footer">ESPACIO INSTITUCIONAL</p>
 </aside>
 <header class="ta-topbar">
   <div class="env hcab">
     <button type="button" class="btn2 ta-menu-toggle" id="taMenuToggle" aria-controls="taSidebar" aria-expanded="false" aria-label="Abrir navegación">☰</button>
-    <div class="ta-top-context"><span class="ta-eyebrow">ESPACIO DE TRABAJO</span><strong>TEC-ARCHIVA</strong></div>
+    <div class="ta-top-context"><span class="ta-eyebrow">ESPACIO DE TRABAJO</span><strong>TEC-SGDEA</strong></div>
     <div class="hquien">
       <button class="btn2" onclick="salirDeLaSesion()">Cerrar sesión</button><b id="quienNombre">—</b>
       <span id="quienCargo">Contrato 733 de 2026 · Servicio Geológico Colombiano</span>
@@ -263,7 +263,7 @@ tr.malaFila input{border-color:var(--carmin);background:#FFF7F9}
 </header>
 
 <main class="env" id="taMain">
-  <div class="ta-crumbs" role="navigation" aria-label="Ruta de navegación"><span>TEC-ARCHIVA</span><span aria-hidden="true">/</span><span id="taCrumb" aria-current="page">Dashboard</span></div>
+  <div class="ta-crumbs" role="navigation" aria-label="Ruta de navegación"><span>TEC-SGDEA</span><span aria-hidden="true">/</span><span id="taCrumb" aria-current="page">Dashboard</span></div>
   <!-- INICIO -->
   <section id="vInicio" class="vista">
     <div class="ta-hero">
@@ -3628,7 +3628,7 @@ async function descargarCalidad(){
     const blob = await respuesta.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "TEC-ARCHIVA_calidad.xlsx";
+    a.href = url; a.download = "TEC-SGDEA_calidad.xlsx";
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   } catch (e) { alert("No fue posible descargar el informe: " + e.message); }
@@ -5199,7 +5199,7 @@ function docPintar(){
 window.addEventListener("beforeunload", e => { if (DOC.sucio) { e.preventDefault(); e.returnValue = ""; } });
 
 </script>
-<script src="/recursos/tec-archiva.js"></script>
+<script src="/recursos/tec-archiva.js?v=sidebar-a01"></script>
 <script src="/recursos/registros-13c.js"></script>
 <script src="/recursos/flujo-13d.js"></script>
 <script src="/recursos/administracion-13e.js"></script>

@@ -204,7 +204,11 @@ class DominioCompleto(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         s=(root/'geology/rutas/cargue.py').read_text(encoding='utf-8')
         f=s[s.index('async def importar_hoja('):s.index('_IMAGENES =')]
-        self.assertLess(f.index('if len(hojas) != 1'),f.index('r = cargar_hoja('))
+        guardar = f.index('r = guardar_hoja(')
+        self.assertLess(f.index('if not hojas or any('), guardar)
+        self.assertLess(f.index('cuerpos = ['), guardar)
+        self.assertLess(f.index('confirmar=False'), f.index('db.commit()'))
+        self.assertIn('db.rollback()', f)
         self.assertNotIn('destino.open("wb")',f)
 
     def test_arranque_no_ejecutado_y_ddl_detectado(self):

@@ -248,6 +248,10 @@ def _ficha(exp: Expediente) -> dict:
              summary="Cargar o corregir una hoja de control, verificarla y detenerse")
 def cargar_hoja(hoja: HojaDeControl, db: Session = Depends(obtener_sesion),
                 quien: Usuario = Depends(usuario_actual)) -> dict:
+    return guardar_hoja(hoja, db, quien)
+
+
+def guardar_hoja(hoja, db, quien, *, sync_commit=None, confirmar=True):
     if not quien.edita_hoja_control:
         raise HTTPException(403, "Su perfil es de consulta y no edita hojas de control.")
 
@@ -341,7 +345,10 @@ def cargar_hoja(hoja: HojaDeControl, db: Session = Depends(obtener_sesion),
                 setattr(t, campo, int(m.group(1)) if m else None)
         _guardar_tramites(db, exp, calculo)
         _huella(db, exp, Estado.HOJA_EN_ELABORACION, "guardar_avance", quien)
-        db.commit()
+        if sync_commit is not None:
+            sync_commit()
+        if confirmar:
+            db.commit()
         return {"carpeta": carpeta, "estado": exp.estado,
                 "mensaje": "Avance guardado. La hoja no se verificó todavía."}
 
@@ -384,7 +391,8 @@ def cargar_hoja(hoja: HojaDeControl, db: Session = Depends(obtener_sesion),
 
     _huella(db, exp, resultado.estado_resultante, "verificar", quien,
             motivo=resultado.detalle(quien.nombre), errores=resultado.errores or None)
-    db.commit()
+    if confirmar:
+        db.commit()
 
     return {"carpeta": carpeta, "estado": exp.estado, "errores": resultado.errores,
             "errores_localizados": [{"no_item": e.no_item, "fila": e.fila, "campo": e.campo,

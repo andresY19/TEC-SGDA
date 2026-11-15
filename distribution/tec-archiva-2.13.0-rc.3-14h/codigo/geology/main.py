@@ -123,7 +123,10 @@ aplicacion.add_middleware(
 from geology.rutas import (apoyo, cargue, consulta, contrato, cuentas, entrega, instrumentos, planeacion,  # noqa: E402
                            seguimiento, ubicacion, unidades, vigilancia)
 
+from geology.rutas import offline_sync
+
 aplicacion.include_router(cuentas.router)
+aplicacion.include_router(offline_sync.router)
 aplicacion.include_router(unidades.router)
 aplicacion.include_router(cargue.router)
 aplicacion.include_router(ubicacion.router)

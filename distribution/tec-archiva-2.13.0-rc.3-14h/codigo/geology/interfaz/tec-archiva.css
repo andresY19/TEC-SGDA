@@ -1,4 +1,4 @@
-/* TEC-ARCHIVA · tokens and shared components */
+/* TEC-SGDEA · tokens and shared components */
 :root {
   --ta-violet:#6257DC;
   --ta-indigo:#4848B6;
@@ -225,7 +225,7 @@ tbody tr:hover { background:#F6F7FE; }
 
 .ta-pagination[hidden] { display:none; }
 
-/* Flujos documentales. Componentes y tokens de TEC-ARCHIVA. */
+/* Flujos documentales. Componentes y tokens de TEC-SGDEA. */
 .ta-steps { display:flex; flex-wrap:wrap; gap:var(--ta-s2); list-style:none; padding:0; margin:0 0 var(--ta-s4); counter-reset:ta-step; }
 .ta-steps li { flex:1 1 140px; counter-increment:ta-step; padding:var(--ta-s2); border:1px solid var(--ta-line); border-radius:var(--ta-radius); color:var(--ta-muted); }
 .ta-steps li::before { content:counter(ta-step) ". "; font-weight:700; }

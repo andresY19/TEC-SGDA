@@ -21,7 +21,7 @@ const REGISTROS = (() => {
     return node('span',text(label),['pill',tone].filter(Boolean).join(' '));
   }
 
-  function DataTable(host, title, columns) {
+  function DataTable(host, title, columns, grupos = null) {
     const status = node('p',null,'ta-status ta-results-message');
     status.setAttribute('role','status');
     const region = node('div',null,'ta-data-scroll');
@@ -65,13 +65,14 @@ const REGISTROS = (() => {
     function render() {
       const pages = Math.max(1,Math.ceil(rows.length/pageSize));
       page = Math.min(Math.max(0,page),pages-1);
-      const ordered = sortIndex < 0 ? rows : [...rows].sort((a,b) =>
+      const ordenar = items => sortIndex < 0 ? items : [...items].sort((a,b) =>
         direction * collator.compare(text(columns[sortIndex].sort(a)),text(columns[sortIndex].sort(b))));
+      const visibles = (grupos ? rows : ordenar(rows)).slice(page*pageSize,(page+1)*pageSize);
       Array.from(headings.cells).forEach((th,index) => {
         if (index === sortIndex) th.setAttribute('aria-sort',direction > 0 ? 'ascending' : 'descending');
         else th.removeAttribute('aria-sort');
       });
-      body.replaceChildren(...ordered.slice(page*pageSize,(page+1)*pageSize).map(item => {
+      const fila = item => {
         const tr = node('tr');
         for (const column of columns) {
           const cell = node('td');
@@ -81,10 +82,13 @@ const REGISTROS = (() => {
           tr.append(cell);
         }
         return tr;
-      }));
+      };
+      body.replaceChildren(...(grupos ? visibles.flatMap(grupo =>
+        [grupos.encabezado(grupo, columns.length), ...ordenar(grupo.carpetas).map(fila)]
+      ) : visibles.map(fila)));
       previous.disabled = page === 0;
       next.disabled = page + 1 >= pages;
-      summary.textContent = 'Página '+(page+1)+' de '+pages+' · '+rows.length+' resultados';
+      summary.textContent = 'Página '+(page+1)+' de '+pages+' · '+rows.length+(grupos ? ' cajas' : ' resultados');
       status.textContent = summary.textContent;
       region.hidden = footer.hidden = rows.length === 0;
     }
@@ -130,6 +134,18 @@ const REGISTROS = (() => {
   const dateRange = row => [row.fecha_inicial,row.fecha_final].filter(Boolean).join(' – ');
   const dateColumn = {label:'Fechas',sort:dateRange,cell:dateRange};
   const can = key => SESION?.pestanas?.includes(key);
+  function encabezadoCaja(caja, columnas) {
+    const fila = node('tr');
+    const celda = node('td');
+    celda.colSpan = columnas;
+    celda.append(node('strong', caja.caja+' · '+caja.total+(caja.total === 1 ? ' carpeta' : ' carpetas')));
+    if (caja.mixta) {
+      const periodos = (caja.periodos || []).join(', ');
+      celda.append(' ', badge(periodos ? 'Caja mixta · '+periodos : 'Caja mixta', 'rev'));
+    }
+    fila.append(celda);
+    return fila;
+  }
   const inventoryTable = DataTable(get('plCajas'),'Carpetas del inventario de origen',[
     field('Carpeta','carpeta'),field('Caja de origen','caja_origen'),field('Folios','folios'),dateColumn,
     {label:'Periodo calculado',sort:row=>row.periodo,cell:row=>[row.periodo,row.origen_periodo].filter(Boolean).join(' · ')},
@@ -137,7 +153,7 @@ const REGISTROS = (() => {
     {label:'Etapa',sort:row=>row.etapa_rotulo,cell:row=>badge(row.etapa_rotulo)},
     {label:'Alertas',cell:row=>(row.banderas||[]).map(key=>PL_BANDERAS[key]||key).join(' · ')},
     {label:'Acciones',cell:row=>can('revision') ? action('Abrir expediente',()=>irAVerFicha(row.carpeta)) : '—'}
-  ]);
+  ], {encabezado: encabezadoCaja});
   const recordsTable = DataTable(get('taRecordsResults'),'Expedientes',[
     field('Carpeta','codigo_carpeta'),{label:'Estado',sort:row=>row.estado,cell:row=>badge(row.estado)},
     field('Responsable','responsable'),field('Fechas','fechas_extremas'),field('Folios','folios'),
@@ -158,23 +174,26 @@ const REGISTROS = (() => {
 
   let inventorySerial=0, recordsSerial=0, publishedSerial=0, detailSerial=0;
   let inventoryReady=false, recordsReady=false;
-  let inventoryRows=[];
+  let inventoryBoxes=[];
   function filterInventory() {
     const period=get('taInventoryPeriod').value;
-    inventoryTable.results(inventoryRows.filter(row=>!period || row.periodo===period),'No hay carpetas que coincidan con los filtros.');
+    const boxes = period ? inventoryBoxes.map(box => ({
+      ...box, carpetas: box.carpetas.filter(row => row.periodo === period)
+    })).filter(box => box.carpetas.length) : inventoryBoxes;
+    inventoryTable.results(boxes,'No hay carpetas que coincidan con los filtros.');
   }
   async function inventario() {
     if (!can('planeacion')) return;
     const serial=++inventorySerial;
     inventoryTable.loading();
-    inventoryRows=[];
+    inventoryBoxes=[];
     try {
       const r=await pedir('/planeacion/cajas?buscar='+encodeURIComponent(get('plBuscar').value.trim()));
       if (serial!==inventorySerial) return;
-      inventoryRows=(r.cajas||[]).flatMap(box=>box.carpetas);
+      inventoryBoxes=r.cajas||[];
       const select=get('taInventoryPeriod');
       const selected=select.value;
-      const periods=[...new Set(inventoryRows.map(row=>row.periodo).filter(Boolean))].sort(collator.compare);
+      const periods=[...new Set(inventoryBoxes.flatMap(box=>box.carpetas.map(row=>row.periodo)).filter(Boolean))].sort(collator.compare);
       select.replaceChildren(new Option('Todos',''),...periods.map(period=>new Option(period,period)));
       select.value=periods.includes(selected)?selected:'';
       inventoryReady=true;
@@ -272,8 +291,20 @@ const REGISTROS = (() => {
   get('taInventoryFilters').addEventListener('submit',event=>{event.preventDefault();inventario();});
   get('taInventoryPeriod').addEventListener('change',filterInventory);
   get('taRecordsFilters').addEventListener('submit',event=>{event.preventDefault();expedientes();});
+  get('resultadoBusqueda').addEventListener('click',event=>{
+    const button = event.target.closest('button');
+    const match = button?.getAttribute('onclick')?.match(/^verFichaLectura\('((?:AC-CP-)[0-9]+)'\)$/);
+    if (!match) return;
+    event.stopPropagation();
+    REGISTROS.abrirFichaLocalizada(match[1]);
+  },true);
   return {
     inventario,publicadas,
+    abrirFichaLocalizada(carpeta) {
+      if (!can('localizacion') || SESION.es_entidad) return;
+      if (SESION.rol === 'consulta' || !can('revision')) return verFichaLectura(carpeta);
+      return irAVerFicha(carpeta);
+    },
     inventarioInicial() { if (!inventoryReady) inventario(); },
     expedientesInicial() { if (!recordsReady) expedientes(); },
     cambioVista() { if (!get('taPublishedDetail').hidden) closePublished(); }

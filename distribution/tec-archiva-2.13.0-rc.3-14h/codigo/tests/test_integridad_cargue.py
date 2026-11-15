@@ -165,7 +165,7 @@ class IntegridadCargue(unittest.TestCase):
             return False, None, "", len(db.filas[Archivo])
         ruta = Path(division.__file__).parents[1] / "rutas" / "cargue.py"
         arbol = ast.parse(ruta.read_text(encoding="utf-8-sig"))
-        nombres = {"_OperacionCargue", "_datos_archivo_archivado", "es_el_mismo_fichero", "_limpiar", "cargar"}
+        nombres = {"_OperacionCargue", "_datos_archivo_archivado", "es_el_mismo_fichero", "_limpiar", "cargar", "cargar_documento"}
         nodos = [n for n in arbol.body if isinstance(n, ast.ImportFrom) and n.module == "__future__"]
         for n in arbol.body:
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.name in nombres:

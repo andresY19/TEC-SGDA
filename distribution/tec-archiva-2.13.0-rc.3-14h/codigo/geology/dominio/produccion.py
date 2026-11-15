@@ -28,6 +28,8 @@ def _embudo(db):
         universo=db.query(UnidadInventario).count(); filas=db.query(Expediente).all()
         c=Counter(e.estado for e in filas)
         return universo,{'inventariadas':c[Estado.EN_INVENTARIO.value],
+            'hoja_en_elaboracion':c[Estado.HOJA_EN_ELABORACION.value],
+            'retiradas':c[Estado.RETIRADO.value],
             'con_hoja_de_control':sum(bool(e.tramites) for e in filas),
             'descritas':sum(bool(e.titulo and e.fecha_descripcion) for e in filas),
             'validadas':sum(c[x.value] for x in (Estado.DESCRIPCION_VALIDADA,Estado.ARCHIVADO,Estado.EN_INVENTARIO)),

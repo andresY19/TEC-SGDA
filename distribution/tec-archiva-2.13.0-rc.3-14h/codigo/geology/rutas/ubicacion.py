@@ -12,12 +12,14 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from geology.nucleo.bd import obtener_sesion
 from geology.modelos import Caja, Expediente, Periodo, Seccion, Serie, Subserie, Trazabilidad
 from geology.rutas.cuentas import usuario_actual
 from geology.dominio import cajas as inv
+from geology.dominio.codigos import normalizar_codigo_carpeta
 from geology.dominio.estados import Estado, Rol, Usuario
 
 router = APIRouter(prefix="/ubicacion", tags=["Reubicación"])
@@ -52,6 +54,12 @@ def _normalizar_caja(codigo: str) -> str:
     if not normalizado or not normalizado.startswith("AH-CJ"):
         raise HTTPException(422, f"«{codigo}» no es una caja definitiva. Use la forma AH-CJ-00001.")
     return normalizado
+
+
+def _bloquear_caja(db: Session, codigo: str) -> None:
+    # El bloqueo de transacción también cubre cajas que aún no existen.
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:clave, 0))"),
+               {"clave": f"geology:ubicacion:{codigo}"})
 
 
 @router.get("/pendientes", summary="Descripciones aprobadas que esperan caja definitiva")
@@ -170,6 +178,7 @@ def asignar(datos: AsignacionEntrada, db: Session = Depends(obtener_sesion),
         raise HTTPException(403, "Agregar carpetas a una caja definitiva lo hace solo la "
                                  "administradora: es lo que fija el inventario de salida.")
     codigo_caja = _normalizar_caja(datos.caja)
+    _bloquear_caja(db, codigo_caja)
 
     caja = db.query(Caja).filter(Caja.codigo == codigo_caja).first()
     if caja and caja.cerrada:
@@ -181,16 +190,22 @@ def asignar(datos: AsignacionEntrada, db: Session = Depends(obtener_sesion),
     subseries_previas = [f"{_a_calculo(db, e).serie} › {_a_calculo(db, e).subserie}" for e in ya_en_la_caja]
     siguiente = max([e.consecutivo_en_caja or 0 for e in ya_en_la_caja], default=0) + 1
 
-    expedientes = {}
-    calculos = []
-    for codigo in datos.carpetas:
-        from geology.dominio.codigos import normalizar_codigo_carpeta
-        carpeta = normalizar_codigo_carpeta(codigo) or codigo.upper()
-        exp = db.query(Expediente).filter(Expediente.codigo_carpeta == carpeta).first()
-        if not exp:
+    carpetas = list(dict.fromkeys(
+        normalizar_codigo_carpeta(codigo) or codigo.strip().upper()
+        for codigo in datos.carpetas
+    ))
+    # El orden de bloqueo es común a solicitudes sobre cajas distintas.
+    expedientes = {
+        exp.codigo_carpeta: exp
+        for exp in db.query(Expediente)
+        .filter(Expediente.codigo_carpeta.in_(carpetas))
+        .order_by(Expediente.codigo_carpeta)
+        .populate_existing().with_for_update().all()
+    }
+    for carpeta in carpetas:
+        if carpeta not in expedientes:
             raise HTTPException(404, f"La carpeta {carpeta} no está en GEOLOGY.")
-        expedientes[carpeta] = exp
-        calculos.append(_a_calculo(db, exp))
+    calculos = [_a_calculo(db, expedientes[carpeta]) for carpeta in carpetas]
 
     try:
         r = inv.asignar_a_caja(calculos, codigo_caja, caja.periodo if caja else "",
@@ -217,9 +232,7 @@ def asignar(datos: AsignacionEntrada, db: Session = Depends(obtener_sesion),
                             motivo=f"Caja {codigo_caja}, carpeta {c.consecutivo_en_caja}"))
         exp.estado = Estado.EN_INVENTARIO.value
 
-    caja.total_carpetas = db.query(Expediente).filter(
-        Expediente.caja_definitiva == codigo_caja).count() + len(r.asignadas)
-    db.commit()
+    db.flush()
     caja.total_carpetas = db.query(Expediente).filter(Expediente.caja_definitiva == codigo_caja).count()
     db.commit()
 
@@ -325,6 +338,7 @@ def cerrar(codigo_caja: str, db: Session = Depends(obtener_sesion),
     if not quien.aprueba_descripcion:
         raise HTTPException(403, "Cerrar una caja lo hace la dirección del proyecto o la líder.")
     codigo = _normalizar_caja(codigo_caja)
+    _bloquear_caja(db, codigo)
     caja = db.query(Caja).filter(Caja.codigo == codigo).first()
     if not caja:
         raise HTTPException(404, f"La caja {codigo} no existe.")
@@ -349,6 +363,7 @@ def reabrir(codigo_caja: str, db: Session = Depends(obtener_sesion),
     if quien.rol.value != "administradora":
         raise HTTPException(403, "Reabrir una caja cerrada solo lo hace la dirección del proyecto.")
     codigo = _normalizar_caja(codigo_caja)
+    _bloquear_caja(db, codigo)
     caja = db.query(Caja).filter(Caja.codigo == codigo).first()
     if not caja or not caja.cerrada:
         raise HTTPException(409, f"La caja {codigo} no está cerrada.")

@@ -1,0 +1,8 @@
+# Preserve the bytes of the interface served by the stable OCI image.
+geology/interfaz/accesibilidad12f.js text eol=lf
+geology/interfaz/administracion-13e.js text eol=crlf
+geology/interfaz/flujo-13d.js text eol=crlf
+geology/interfaz/index.html text eol=crlf
+geology/interfaz/registros-13c.js -text
+geology/interfaz/tec-archiva.css text eol=crlf
+geology/interfaz/tec-archiva.js text eol=crlf

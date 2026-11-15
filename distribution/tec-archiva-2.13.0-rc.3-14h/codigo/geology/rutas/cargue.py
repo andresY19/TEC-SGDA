@@ -164,6 +164,10 @@ async def cargar(archivo: UploadFile = File(...), db: Session = Depends(obtener_
     no se vuelve a leer ni se pierde ninguna edición. Es para cambiar las fotos de cámara
     por las del escáner definitivo. Queda constancia con la huella de lo que se retiró.
     """
+    return await cargar_documento(archivo, db, quien, reemplazar, definitiva)
+
+
+async def cargar_documento(archivo, db, quien, reemplazar=False, definitiva=False, *, sync_commit=None):
     if not quien.edita_hoja_control:
         raise HTTPException(403, "Su perfil es de consulta y no carga expedientes.")
 
@@ -336,6 +340,8 @@ async def cargar(archivo: UploadFile = File(...), db: Session = Depends(obtener_
                 raise OSError("Un archivo cambió antes de la confirmación SQL.")
         operacion.estado("confirmacion_sql_pendiente", commit_intentado=True,
                          registros=[_datos_archivo_archivado(a) for a in registros])
+        if sync_commit is not None:
+            sync_commit(exp, sha)
         commit_intentado = True
         db.commit()
     except BaseException as error:
@@ -513,10 +519,10 @@ async def importar_hoja(archivo: UploadFile = File(...), verificar: bool = True,
         if len(contenido) > 25 * 1024 * 1024:
             raise HTTPException(413, "El libro supera el límite local de 25 MiB.")
 
-    from geology.rutas.unidades import HojaDeControl, TramiteEntrada, cargar_hoja
+    from geology.rutas.unidades import guardar_hoja
     from geology.dominio.importar_hoja import leer_libro
 
-    resultados, rechazadas = [], []
+    resultados = []
 
     # Leer el libro va aparte y con su propia red: un archivo dañado, protegido con
     # contraseña o con una hoja que openpyxl no entienda no puede llegar a la pantalla como
@@ -530,65 +536,38 @@ async def importar_hoja(archivo: UploadFile = File(...), verificar: bool = True,
             "un formato que no es el actual de Excel. Ábralo, use «Guardar como» → Libro de "
             f"Excel (*.xlsx) y vuelva a subirlo. Detalle: {str(ex)[:180]}"))
 
-    # cargar_hoja confirma su propia transacción. Hasta separar esa unidad de
-    # trabajo, rechazar lotes multicarpeta evita confirmar parcialmente el libro.
-    if len(hojas) != 1:
-        raise HTTPException(422, "La importación local admite una sola carpeta por libro; no se guardó ninguna hoja.")
-    if any(h.error or not h.codigo_carpeta or not h.tramites for h in hojas):
+    if not hojas or any(h.error or not h.codigo_carpeta or not h.tramites for h in hojas):
         raise HTTPException(422, "Libro incompleto; no se guardó ninguna hoja.")
     try:
-        for h in hojas:
-            _cuerpo_de(h, h.encabezado, nombre, quien, verificar)
-    except Exception:
-        raise HTTPException(422, "Datos incompatibles con la hoja de control; no se guardó ninguna hoja.") from None
+        cuerpos = [_cuerpo_de(h, h.encabezado, nombre, quien, verificar) for h in hojas]
+    except (ValueError, TypeError) as ex:
+        raise HTTPException(422, "Datos incompatibles con la hoja de control; no se guardó ninguna hoja.") from ex
 
-    for h in hojas:
-        if h.error:
-            rechazadas.append({"hoja": h.hoja or nombre, "motivo": h.error})
-            continue
-        if not h.codigo_carpeta:
-            rechazadas.append({"hoja": h.hoja, "motivo": " ".join(h.avisos)
-                               or "No se pudo deducir el código de carpeta."})
-            continue
-        if not h.tramites:
-            rechazadas.append({"hoja": h.hoja, "carpeta": h.codigo_carpeta,
-                               "motivo": "La pestaña no trae trámites con datos."})
-            continue
-
-        e = h.encabezado
-        try:
-            cuerpo = _cuerpo_de(h, e, nombre, quien, verificar)
-        except Exception as ex:
-            # Armar el cuerpo valida cada casilla. Si una no pasa, se dice cuál hoja y por
-            # qué, y se sigue con las demás: una hoja mala no puede tumbar el lote entero.
-            rechazadas.append({
-                "hoja": h.hoja, "carpeta": h.codigo_carpeta,
-                "motivo": f"Los datos de esta hoja no pasaron la comprobación "
-                          f"({type(ex).__name__}). Detalle: {str(ex)[:220]}"})
-            continue
-        try:
-            r = cargar_hoja(cuerpo, db, quien)
+    # Un orden estable reduce conflictos al importar libros con carpetas en común.
+    try:
+        for h, cuerpo in sorted(zip(hojas, cuerpos), key=lambda par: par[0].codigo_carpeta):
+            r = guardar_hoja(cuerpo, db, quien, confirmar=False)
             r["hoja"] = h.hoja
             r["avisos_de_lectura"] = h.avisos
-            # Contraste con la imagen de esa carpeta, si ya está cargada.
-            try:
-                from geology.dominio.validar_entrega import validar_unidad
-                from geology.modelos import Expediente as _Exp
-                _e = db.query(_Exp).filter(_Exp.codigo_carpeta == r.get("carpeta")).first()
-                r["validacion"] = validar_unidad(db, _e) if _e else None
-            except Exception as ex2:
-                r["validacion"] = None
-                print(f"AVISO. No se pudo validar {r.get('carpeta')} contra la imagen: {ex2}")
             resultados.append(r)
-        except HTTPException as ex:
-            rechazadas.append({"hoja": h.hoja, "carpeta": h.codigo_carpeta,
-                               "motivo": str(ex.detail)})
-        except Exception as ex:
+        db.commit()
+    except HTTPException as ex:
+        db.rollback()
+        raise HTTPException(ex.status_code, f"No se importó el libro. Hoja {h.hoja}: {ex.detail}") from ex
+    except Exception:
+        db.rollback()
+        raise
+
+    por_hoja = {r["hoja"]: r for r in resultados}
+    resultados = [por_hoja[h.hoja] for h in hojas]
+    from geology.dominio.validar_entrega import validar_unidad
+    for r in resultados:
+        try:
+            exp = db.query(Expediente).filter(Expediente.codigo_carpeta == r["carpeta"]).first()
+            r["validacion"] = validar_unidad(db, exp) if exp else None
+        except Exception:
             db.rollback()
-            rechazadas.append({
-                "hoja": h.hoja, "carpeta": h.codigo_carpeta,
-                "motivo": f"No se pudo guardar esta hoja ({type(ex).__name__}). "
-                          f"Detalle: {str(ex)[:200]}"})
+            r["validacion"] = None
 
     con_errores = sum(1 for r in resultados if r.get("errores"))
     con_dif_imagen = sum(1 for r in resultados
@@ -596,13 +575,13 @@ async def importar_hoja(archivo: UploadFile = File(...), verificar: bool = True,
     return {
         "con_diferencias_con_imagen": con_dif_imagen,
         "archivo": nombre,
-        "hojas_leidas": len(resultados) + len(rechazadas),
+        "hojas_leidas": len(resultados),
         "importadas": len(resultados),
         "con_errores": con_errores,
-        "rechazadas": rechazadas,
+        "rechazadas": [],
         "resultados": resultados,
         "mensaje": (f"{len(resultados)} hoja(s) importada(s); {con_errores} con errores por "
-                    f"corregir y {len(rechazadas)} que no se pudieron leer."),
+                    "corregir."),
     }
 
 
